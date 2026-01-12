@@ -1,0 +1,52 @@
+# Microsoft Security DevOps (MSDO) Workflow
+# For Microsoft employees, this provides integration with internal security tooling
+# See: https://github.com/microsoft/security-devops-action
+
+name: Microsoft Security DevOps
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  MSDO:
+    name: Microsoft Security DevOps Analysis
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Microsoft Security DevOps
+        uses: microsoft/security-devops-action@v1
+        id: msdo
+        with:
+          # Categories to run (all available for comprehensive scan)
+          categories: 'secrets,code'
+
+          # Tools to run
+          tools: 'credscan,terrascan,templateanalyzer'
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: ${{ steps.msdo.outputs.sarifFile }}
+
+      - name: Upload scan logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: msdo-logs
+          path: .msdo/
+          retention-days: 30

@@ -1,0 +1,157 @@
+# Security Scanning Workflow
+# Runs PSScriptAnalyzer for PowerShell code quality and security
+# Runs credential/secret scanning
+
+name: Security Scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Run weekly on Sundays at midnight
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # PSScriptAnalyzer - PowerShell static analysis
+  powershell-analysis:
+    name: PSScriptAnalyzer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          # Install PSScriptAnalyzer if not present
+          if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+            Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          }
+
+          # Run analysis on all PowerShell files
+          $results = Get-ChildItem -Path . -Include *.ps1,*.psm1,*.psd1 -Recurse |
+            ForEach-Object {
+              Invoke-ScriptAnalyzer -Path $_.FullName -Severity Warning,Error -ReportSummary
+            }
+
+          # Output results
+          if ($results) {
+            $results | Format-Table -AutoSize
+
+            # Count errors
+            $errors = $results | Where-Object { $_.Severity -eq 'Error' }
+            if ($errors.Count -gt 0) {
+              Write-Error "Found $($errors.Count) error(s) in PowerShell scripts"
+              exit 1
+            }
+          } else {
+            Write-Host "No issues found!" -ForegroundColor Green
+          }
+
+      - name: Generate SARIF report
+        if: always()
+        shell: pwsh
+        run: |
+          # Install PSScriptAnalyzer if not present
+          if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+            Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          }
+
+          # Create output directory
+          New-Item -ItemType Directory -Path sarif-results -Force | Out-Null
+
+          # Run analysis and export as SARIF (if supported)
+          $results = Get-ChildItem -Path . -Include *.ps1,*.psm1,*.psd1 -Recurse |
+            ForEach-Object {
+              Invoke-ScriptAnalyzer -Path $_.FullName -Severity Information,Warning,Error
+            }
+
+          # Convert to simple JSON for review
+          $results | ConvertTo-Json -Depth 5 | Set-Content -Path sarif-results/psscriptanalyzer-results.json
+
+      - name: Upload analysis results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: psscriptanalyzer-results
+          path: sarif-results/
+          retention-days: 30
+
+  # Secret scanning - check for accidentally committed credentials
+  secret-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        continue-on-error: true
+
+      - name: Check for common credential patterns
+        shell: bash
+        run: |
+          echo "Checking for credential patterns..."
+
+          # Patterns to check (case insensitive)
+          PATTERNS=(
+            "password\s*=\s*['\"][^'\"]+['\"]"
+            "secret\s*=\s*['\"][^'\"]+['\"]"
+            "api[_-]?key\s*=\s*['\"][^'\"]+['\"]"
+            "[a-zA-Z0-9]{32,}"  # Long alphanumeric strings (potential tokens)
+          )
+
+          FOUND=0
+
+          for pattern in "${PATTERNS[@]}"; do
+            # Search in tracked files only, exclude example files
+            if grep -riE "$pattern" --include="*.ps1" --include="*.json" . 2>/dev/null | grep -v "example" | grep -v ".github"; then
+              echo "WARNING: Potential credential pattern found!"
+              FOUND=1
+            fi
+          done
+
+          # Check for real GUIDs in non-example files (potential tenant/client IDs)
+          echo "Checking for GUIDs in tracked files..."
+          GUID_PATTERN='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
+          # These files should NOT contain real GUIDs
+          for file in *.ps1 docs/*.md; do
+            if [ -f "$file" ]; then
+              if grep -iE "$GUID_PATTERN" "$file" 2>/dev/null; then
+                echo "INFO: GUID found in $file - verify this is intentional"
+              fi
+            fi
+          done
+
+          if [ $FOUND -eq 1 ]; then
+            echo "::warning::Potential credentials detected. Please review."
+          else
+            echo "No obvious credential patterns found."
+          fi
+
+  # Dependency review (for future npm/nuget additions)
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        continue-on-error: true

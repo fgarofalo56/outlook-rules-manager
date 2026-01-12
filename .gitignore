@@ -1,0 +1,69 @@
+# ===================
+# SENSITIVE DATA
+# ===================
+
+# Environment configuration (contains tenant-specific IDs)
+.env
+.env.*
+!.env.example
+
+# Generated config (contains tenant-specific IDs)
+app-config.json
+
+# Rules config (contains personal email addresses)
+rules-config.json
+!rules-config.example.json
+
+# Exported rules (may contain email addresses)
+exported-rules.json
+
+# Rule backups (may contain sensitive data)
+backups/
+
+# ===================
+# POWERSNELL/SYSTEM
+# ===================
+
+# PowerShell temp files
+*.tmp
+*.log
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ===================
+# IDE/EDITOR
+# ===================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains
+.idea/
+
+# ===================
+# TEMP/BUILD
+# ===================
+
+# Temporary directories
+temp/
+tmp/
+.temp/
+
+# Node (if any tooling added)
+node_modules/
+
+# ===================
+# SECURITY SCANNING
+# ===================
+
+# Scan results (may contain sensitive paths)
+**/sarif-results/
+*.sarif

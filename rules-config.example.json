@@ -1,0 +1,204 @@
+{
+  "$schema": "./rules-schema.json",
+  "_metadata": {
+    "description": "Outlook Inbox Rules Configuration - EXAMPLE TEMPLATE",
+    "version": "1.0.0",
+    "lastModified": "2026-01-12",
+    "notes": "Copy to rules-config.json and customize with your own values"
+  },
+  "settings": {
+    "noiseAction": "Archive",
+    "categories": {
+      "action": "Action Required",
+      "metrics": "Metrics"
+    }
+  },
+  "folders": [
+    {
+      "name": "Priority",
+      "description": "VIP senders",
+      "parent": "Inbox"
+    },
+    {
+      "name": "Action Required",
+      "description": "Items needing response",
+      "parent": "Inbox"
+    },
+    {
+      "name": "Metrics",
+      "description": "Performance and metrics content",
+      "parent": "Inbox"
+    },
+    {
+      "name": "Leadership",
+      "description": "Executive communications",
+      "parent": "Inbox"
+    },
+    {
+      "name": "Alerts",
+      "description": "System notifications",
+      "parent": "Inbox"
+    },
+    {
+      "name": "Low Priority",
+      "description": "Newsletters, marketing, noise",
+      "parent": "Inbox"
+    }
+  ],
+  "senderLists": {
+    "priority": {
+      "description": "VIP senders who get priority treatment",
+      "addresses": [
+        "manager@example.com",
+        "skip.level@example.com",
+        "key.collaborator@example.com"
+      ]
+    },
+    "noiseDomains": {
+      "description": "Domains to filter as low priority or delete",
+      "domains": [
+        "newsletter.example.com",
+        "marketing.example.com",
+        "notifications.*",
+        "mailer.*"
+      ]
+    }
+  },
+  "keywordLists": {
+    "action": {
+      "description": "Keywords indicating action required",
+      "keywords": [
+        "Action",
+        "Approval",
+        "Response Needed",
+        "Due",
+        "Deadline",
+        "Sign-off",
+        "Decision Required"
+      ]
+    },
+    "leadership": {
+      "description": "Keywords for leadership/executive communications",
+      "keywords": [
+        "Leadership",
+        "Executive",
+        "LT",
+        "Review",
+        "Staff Meeting"
+      ]
+    },
+    "metrics": {
+      "description": "Keywords for metrics and performance content",
+      "keywords": [
+        "Performance",
+        "Impact",
+        "KPI",
+        "QBR",
+        "Scorecard"
+      ]
+    },
+    "alerts": {
+      "description": "Keywords for alerts and notifications",
+      "keywords": [
+        "Alert",
+        "Notification",
+        "Digest"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "id": "rule-01",
+      "name": "01 - Priority Senders",
+      "description": "Route VIP sender emails to Priority folder with high importance",
+      "enabled": true,
+      "priority": 1,
+      "conditions": {
+        "from": "@senderLists.priority"
+      },
+      "actions": {
+        "moveToFolder": "Inbox\\Priority",
+        "markImportance": "High",
+        "stopProcessingRules": true
+      }
+    },
+    {
+      "id": "rule-02",
+      "name": "02 - Action Required",
+      "description": "Flag emails requiring action with category and high importance",
+      "enabled": true,
+      "priority": 2,
+      "conditions": {
+        "subjectContainsWords": "@keywordLists.action"
+      },
+      "actions": {
+        "moveToFolder": "Inbox\\Action Required",
+        "assignCategories": [
+          "@settings.categories.action"
+        ],
+        "markImportance": "High",
+        "flagMessage": true
+      }
+    },
+    {
+      "id": "rule-03",
+      "name": "03 - Metrics",
+      "description": "Categorize and flag metrics-related emails",
+      "enabled": true,
+      "priority": 3,
+      "conditions": {
+        "subjectContainsWords": "@keywordLists.metrics",
+        "bodyContainsWords": "@keywordLists.metrics"
+      },
+      "actions": {
+        "moveToFolder": "Inbox\\Metrics",
+        "assignCategories": [
+          "@settings.categories.metrics"
+        ],
+        "flagMessage": true
+      }
+    },
+    {
+      "id": "rule-04",
+      "name": "04 - Leadership & Exec",
+      "description": "Route leadership communications with high importance",
+      "enabled": true,
+      "priority": 4,
+      "conditions": {
+        "subjectContainsWords": "@keywordLists.leadership"
+      },
+      "actions": {
+        "moveToFolder": "Inbox\\Leadership",
+        "markImportance": "High"
+      }
+    },
+    {
+      "id": "rule-05",
+      "name": "05 - Alerts & Notifications",
+      "description": "Auto-read and route system notifications",
+      "enabled": true,
+      "priority": 5,
+      "conditions": {
+        "subjectContainsWords": "@keywordLists.alerts"
+      },
+      "actions": {
+        "moveToFolder": "Inbox\\Alerts",
+        "markAsRead": true
+      }
+    },
+    {
+      "id": "rule-99",
+      "name": "99 - Noise Filter",
+      "description": "Filter newsletters and marketing to Low Priority or delete",
+      "enabled": true,
+      "priority": 99,
+      "conditions": {
+        "senderDomainIs": "@senderLists.noiseDomains"
+      },
+      "actions": {
+        "moveToFolder": "Inbox\\Low Priority",
+        "markAsRead": true
+      }
+    }
+  ]
+}
