@@ -23,6 +23,11 @@
     - Folders:     List inbox subfolders with item counts
     - Stats:       Show mailbox statistics
 
+    Mailbox Settings Operations:
+    - OutOfOffice: View/set Out-of-Office auto-reply settings
+    - Forwarding:  View/set mailbox forwarding
+    - JunkMail:    View/set junk mail (safe/blocked senders) settings
+
     Utility Operations:
     - Validate:    Check rules for potential issues
     - Categories:  List available Outlook categories
@@ -44,6 +49,30 @@
 
 .PARAMETER EnableAuditLog
     Enable audit logging to ./logs/ directory (requires SecurityHelpers module)
+
+.PARAMETER OOOEnabled
+    Enable or disable Out-of-Office auto-reply (use with -Operation OutOfOffice)
+
+.PARAMETER OOOInternal
+    Internal auto-reply message (use with -Operation OutOfOffice)
+
+.PARAMETER OOOExternal
+    External auto-reply message (use with -Operation OutOfOffice)
+
+.PARAMETER OOOStartDate
+    Out-of-Office start date (use with -Operation OutOfOffice)
+
+.PARAMETER OOOEndDate
+    Out-of-Office end date (use with -Operation OutOfOffice)
+
+.PARAMETER ForwardingAddress
+    Email address to forward mail to (use with -Operation Forwarding)
+
+.PARAMETER ForwardingEnabled
+    Enable/disable forwarding (use with -Operation Forwarding)
+
+.PARAMETER DeliverToMailbox
+    Keep a copy in mailbox when forwarding (use with -Operation Forwarding)
 
 .NOTES
     Use -Verbose for detailed diagnostic output when troubleshooting.
@@ -74,12 +103,24 @@
     # Checks rules for potential conflicts or issues
 
 .EXAMPLE
-    .\Manage-OutlookRules.ps1 -Operation DisableAll
-    # Disables all inbox rules
+    .\Manage-OutlookRules.ps1 -Operation OutOfOffice
+    # View current Out-of-Office settings
 
 .EXAMPLE
-    .\Manage-OutlookRules.ps1 -Operation DeleteAll -Force
-    # Deletes ALL inbox rules (use with caution!)
+    .\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true -OOOInternal "I'm out of the office"
+    # Enable Out-of-Office with a message
+
+.EXAMPLE
+    .\Manage-OutlookRules.ps1 -Operation Forwarding
+    # View current forwarding settings
+
+.EXAMPLE
+    .\Manage-OutlookRules.ps1 -Operation Forwarding -ForwardingAddress "backup@example.com" -ForwardingEnabled $true
+    # Enable forwarding to another address
+
+.EXAMPLE
+    .\Manage-OutlookRules.ps1 -Operation JunkMail
+    # View junk mail settings including safe/blocked senders
 
 .EXAMPLE
     .\Manage-OutlookRules.ps1 -Operation Deploy -Verbose
@@ -96,7 +137,8 @@ param(
     [ValidateSet(
         "List", "Show", "Export", "Backup", "Import", "Compare", "Deploy", "Pull",
         "Enable", "Disable", "EnableAll", "DisableAll", "Delete", "DeleteAll",
-        "Folders", "Stats", "Validate", "Categories"
+        "Folders", "Stats", "Validate", "Categories",
+        "OutOfOffice", "Forwarding", "JunkMail"
     )]
     [string]$Operation,
 
@@ -112,7 +154,43 @@ param(
     [switch]$Force,
 
     [Parameter(Mandatory = $false)]
-    [switch]$EnableAuditLog
+    [switch]$EnableAuditLog,
+
+    # Out-of-Office parameters
+    [Parameter(Mandatory = $false)]
+    [Nullable[bool]]$OOOEnabled,
+
+    [Parameter(Mandatory = $false)]
+    [string]$OOOInternal,
+
+    [Parameter(Mandatory = $false)]
+    [string]$OOOExternal,
+
+    [Parameter(Mandatory = $false)]
+    [datetime]$OOOStartDate,
+
+    [Parameter(Mandatory = $false)]
+    [datetime]$OOOEndDate,
+
+    # Forwarding parameters
+    [Parameter(Mandatory = $false)]
+    [string]$ForwardingAddress,
+
+    [Parameter(Mandatory = $false)]
+    [Nullable[bool]]$ForwardingEnabled,
+
+    [Parameter(Mandatory = $false)]
+    [Nullable[bool]]$DeliverToMailbox,
+
+    # Junk mail parameters
+    [Parameter(Mandatory = $false)]
+    [string[]]$SafeSenders,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$BlockedSenders,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$SafeRecipients
 )
 
 # ---------------------------
@@ -297,21 +375,105 @@ function Convert-ConfigRuleToParams {
 
     $params = @{}
 
-    # Process conditions
+    # ===================
+    # PROCESS CONDITIONS
+    # ===================
+
+    # Sender conditions
     if ($Rule.conditions.from) {
         $params["From"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.from
     }
+    if ($Rule.conditions.fromAddressContainsWords) {
+        $params["FromAddressContainsWords"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.fromAddressContainsWords
+    }
+    if ($Rule.conditions.senderDomainIs) {
+        $params["SenderDomainIs"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.senderDomainIs
+    }
+
+    # Recipient conditions
+    if ($Rule.conditions.sentTo) {
+        $params["SentTo"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.sentTo
+    }
+    if ($Rule.conditions.recipientAddressContainsWords) {
+        $params["RecipientAddressContainsWords"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.recipientAddressContainsWords
+    }
+    if ($null -ne $Rule.conditions.myNameInToBox) {
+        $params["MyNameInToBox"] = $Rule.conditions.myNameInToBox
+    }
+    if ($null -ne $Rule.conditions.myNameInCcBox) {
+        $params["MyNameInCcBox"] = $Rule.conditions.myNameInCcBox
+    }
+    if ($null -ne $Rule.conditions.myNameInToOrCcBox) {
+        $params["MyNameInToOrCcBox"] = $Rule.conditions.myNameInToOrCcBox
+    }
+    if ($null -ne $Rule.conditions.myNameNotInToBox) {
+        $params["MyNameNotInToBox"] = $Rule.conditions.myNameNotInToBox
+    }
+    if ($null -ne $Rule.conditions.sentOnlyToMe) {
+        $params["SentOnlyToMe"] = $Rule.conditions.sentOnlyToMe
+    }
+
+    # Content conditions
     if ($Rule.conditions.subjectContainsWords) {
         $params["SubjectContainsWords"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.subjectContainsWords
     }
     if ($Rule.conditions.bodyContainsWords) {
         $params["BodyContainsWords"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.bodyContainsWords
     }
-    if ($Rule.conditions.senderDomainIs) {
-        $params["SenderDomainIs"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.senderDomainIs
+    if ($Rule.conditions.subjectOrBodyContainsWords) {
+        $params["SubjectOrBodyContainsWords"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.subjectOrBodyContainsWords
+    }
+    if ($Rule.conditions.headerContainsWords) {
+        $params["HeaderContainsWords"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.headerContainsWords
     }
 
-    # Process actions
+    # Message property conditions
+    if ($null -ne $Rule.conditions.hasAttachment) {
+        $params["HasAttachment"] = $Rule.conditions.hasAttachment
+    }
+    if ($Rule.conditions.messageTypeMatches) {
+        # Valid values: AutomaticReply, AutomaticForward, Encrypted, Calendaring, CalendaringResponse,
+        # PermissionControlled, Voicemail, Signed, ApprovalRequest, ReadReceipt, NonDeliveryReport
+        $params["MessageTypeMatches"] = $Rule.conditions.messageTypeMatches
+    }
+    if ($Rule.conditions.withImportance) {
+        # Valid values: High, Normal, Low
+        $params["WithImportance"] = $Rule.conditions.withImportance
+    }
+    if ($Rule.conditions.withSensitivity) {
+        # Valid values: Normal, Personal, Private, CompanyConfidential
+        $params["WithSensitivity"] = $Rule.conditions.withSensitivity
+    }
+    if ($Rule.conditions.flaggedForAction) {
+        # Valid values: Any, Call, DoNotForward, FollowUp, ForYourInformation, Forward, NoResponseNecessary,
+        # Read, Reply, ReplyToAll, Review
+        $params["FlaggedForAction"] = $Rule.conditions.flaggedForAction
+    }
+    if ($Rule.conditions.hasClassification) {
+        $params["HasClassification"] = $Rule.conditions.hasClassification
+    }
+
+    # Size conditions
+    if ($Rule.conditions.withinSizeRangeMaximum) {
+        $params["WithinSizeRangeMaximum"] = $Rule.conditions.withinSizeRangeMaximum
+    }
+    if ($Rule.conditions.withinSizeRangeMinimum) {
+        $params["WithinSizeRangeMinimum"] = $Rule.conditions.withinSizeRangeMinimum
+    }
+
+    # Date conditions
+    if ($Rule.conditions.receivedAfterDate) {
+        $params["ReceivedAfterDate"] = [datetime]$Rule.conditions.receivedAfterDate
+    }
+    if ($Rule.conditions.receivedBeforeDate) {
+        $params["ReceivedBeforeDate"] = [datetime]$Rule.conditions.receivedBeforeDate
+    }
+
+    # ===================
+    # PROCESS ACTIONS
+    # ===================
+
+    # Move/Copy actions
     if ($Rule.actions.moveToFolder) {
         # Handle noise action override
         if ($Rule.id -eq "rule-99" -and $Config.settings.noiseAction -eq "Delete") {
@@ -321,26 +483,63 @@ function Convert-ConfigRuleToParams {
             $params["MoveToFolder"] = $Rule.actions.moveToFolder
         }
     }
-    if ($Rule.actions.markImportance) {
-        $params["MarkImportance"] = $Rule.actions.markImportance
+    if ($Rule.actions.copyToFolder) {
+        $params["CopyToFolder"] = $Rule.actions.copyToFolder
     }
+    if ($Rule.actions.deleteMessage) {
+        $params["DeleteMessage"] = $Rule.actions.deleteMessage
+    }
+    if ($Rule.actions.softDeleteMessage) {
+        $params["SoftDeleteMessage"] = $Rule.actions.softDeleteMessage
+    }
+
+    # Mark actions
     if ($Rule.actions.markAsRead) {
         $params["MarkAsRead"] = $Rule.actions.markAsRead
+    }
+    if ($Rule.actions.markImportance) {
+        $params["MarkImportance"] = $Rule.actions.markImportance
     }
     if ($Rule.actions.flagMessage) {
         $params["FlagMessage"] = $Rule.actions.flagMessage
     }
-    if ($Rule.actions.stopProcessingRules) {
-        $params["StopProcessingRules"] = $Rule.actions.stopProcessingRules
+    if ($null -ne $Rule.actions.pinMessage) {
+        $params["PinMessage"] = $Rule.actions.pinMessage
     }
+
+    # Category actions
     if ($Rule.actions.assignCategories) {
         $categories = $Rule.actions.assignCategories | ForEach-Object {
             Resolve-ConfigReferences -Config $Config -Value $_
         }
         $params["ApplyCategory"] = $categories
     }
-    if ($Rule.actions.deleteMessage) {
-        $params["DeleteMessage"] = $Rule.actions.deleteMessage
+    if ($Rule.actions.applySystemCategory) {
+        # Valid values: NotDefined, Bills, Commerce, Entertainment, Health, Insurance, LiveView,
+        # Lodging, Package, Shipping, Shopping, Travel, Flight, Money, HomeAutomation
+        $params["ApplySystemCategory"] = $Rule.actions.applySystemCategory
+    }
+    if ($Rule.actions.deleteSystemCategory) {
+        $params["DeleteSystemCategory"] = $Rule.actions.deleteSystemCategory
+    }
+
+    # Forward/Redirect actions (use with caution - security implications)
+    if ($Rule.actions.forwardTo) {
+        Write-Verbose "SECURITY: Rule '$($Rule.name)' contains forwardTo action"
+        $params["ForwardTo"] = Resolve-ConfigReferences -Config $Config -Value $Rule.actions.forwardTo
+    }
+    if ($Rule.actions.redirectTo) {
+        Write-Verbose "SECURITY: Rule '$($Rule.name)' contains redirectTo action"
+        $params["RedirectTo"] = Resolve-ConfigReferences -Config $Config -Value $Rule.actions.redirectTo
+    }
+    if ($Rule.actions.forwardAsAttachmentTo) {
+        Write-Verbose "SECURITY: Rule '$($Rule.name)' contains forwardAsAttachmentTo action"
+        $params["ForwardAsAttachmentTo"] = Resolve-ConfigReferences -Config $Config -Value $Rule.actions.forwardAsAttachmentTo
+    }
+
+    # Processing control
+    if ($Rule.actions.stopProcessingRules) {
+        $params["StopProcessingRules"] = $Rule.actions.stopProcessingRules
     }
 
     return $params
@@ -352,31 +551,74 @@ function Export-RuleToConfig {
     $conditions = @{}
     $actions = @{}
 
-    # Map conditions
+    # ===================
+    # MAP CONDITIONS
+    # ===================
+
+    # Sender conditions
     if ($Rule.From) { $conditions["from"] = @($Rule.From) }
     if ($Rule.FromAddressContainsWords) { $conditions["fromAddressContainsWords"] = @($Rule.FromAddressContainsWords) }
-    if ($Rule.SubjectContainsWords) { $conditions["subjectContainsWords"] = @($Rule.SubjectContainsWords) }
-    if ($Rule.SubjectOrBodyContainsWords) { $conditions["subjectOrBodyContainsWords"] = @($Rule.SubjectOrBodyContainsWords) }
-    if ($Rule.BodyContainsWords) { $conditions["bodyContainsWords"] = @($Rule.BodyContainsWords) }
     if ($Rule.SenderDomainIs) { $conditions["senderDomainIs"] = @($Rule.SenderDomainIs) }
+
+    # Recipient conditions
+    if ($Rule.SentTo) { $conditions["sentTo"] = @($Rule.SentTo) }
     if ($Rule.RecipientAddressContainsWords) { $conditions["recipientAddressContainsWords"] = @($Rule.RecipientAddressContainsWords) }
+    if ($Rule.MyNameInToBox) { $conditions["myNameInToBox"] = $Rule.MyNameInToBox }
+    if ($Rule.MyNameInCcBox) { $conditions["myNameInCcBox"] = $Rule.MyNameInCcBox }
+    if ($Rule.MyNameInToOrCcBox) { $conditions["myNameInToOrCcBox"] = $Rule.MyNameInToOrCcBox }
+    if ($Rule.MyNameNotInToBox) { $conditions["myNameNotInToBox"] = $Rule.MyNameNotInToBox }
+    if ($Rule.SentOnlyToMe) { $conditions["sentOnlyToMe"] = $Rule.SentOnlyToMe }
+
+    # Content conditions
+    if ($Rule.SubjectContainsWords) { $conditions["subjectContainsWords"] = @($Rule.SubjectContainsWords) }
+    if ($Rule.BodyContainsWords) { $conditions["bodyContainsWords"] = @($Rule.BodyContainsWords) }
+    if ($Rule.SubjectOrBodyContainsWords) { $conditions["subjectOrBodyContainsWords"] = @($Rule.SubjectOrBodyContainsWords) }
+    if ($Rule.HeaderContainsWords) { $conditions["headerContainsWords"] = @($Rule.HeaderContainsWords) }
+
+    # Message property conditions
     if ($Rule.HasAttachment) { $conditions["hasAttachment"] = $Rule.HasAttachment }
     if ($Rule.MessageTypeMatches) { $conditions["messageTypeMatches"] = $Rule.MessageTypeMatches }
     if ($Rule.WithImportance) { $conditions["withImportance"] = $Rule.WithImportance }
+    if ($Rule.WithSensitivity) { $conditions["withSensitivity"] = $Rule.WithSensitivity }
     if ($Rule.FlaggedForAction) { $conditions["flaggedForAction"] = $Rule.FlaggedForAction }
+    if ($Rule.HasClassification) { $conditions["hasClassification"] = $Rule.HasClassification }
 
-    # Map actions
+    # Size conditions
+    if ($Rule.WithinSizeRangeMaximum) { $conditions["withinSizeRangeMaximum"] = $Rule.WithinSizeRangeMaximum }
+    if ($Rule.WithinSizeRangeMinimum) { $conditions["withinSizeRangeMinimum"] = $Rule.WithinSizeRangeMinimum }
+
+    # Date conditions
+    if ($Rule.ReceivedAfterDate) { $conditions["receivedAfterDate"] = $Rule.ReceivedAfterDate.ToString("yyyy-MM-dd") }
+    if ($Rule.ReceivedBeforeDate) { $conditions["receivedBeforeDate"] = $Rule.ReceivedBeforeDate.ToString("yyyy-MM-dd") }
+
+    # ===================
+    # MAP ACTIONS
+    # ===================
+
+    # Move/Copy actions
     if ($Rule.MoveToFolder) { $actions["moveToFolder"] = $Rule.MoveToFolder }
     if ($Rule.CopyToFolder) { $actions["copyToFolder"] = $Rule.CopyToFolder }
     if ($Rule.DeleteMessage) { $actions["deleteMessage"] = $true }
+    if ($Rule.SoftDeleteMessage) { $actions["softDeleteMessage"] = $true }
+
+    # Mark actions
     if ($Rule.MarkAsRead) { $actions["markAsRead"] = $true }
     if ($Rule.MarkImportance) { $actions["markImportance"] = $Rule.MarkImportance }
-    if ($Rule.ApplyCategory) { $actions["assignCategories"] = @($Rule.ApplyCategory) }
     if ($Rule.FlagMessage) { $actions["flagMessage"] = $true }
-    if ($Rule.StopProcessingRules) { $actions["stopProcessingRules"] = $true }
+    if ($Rule.PinMessage) { $actions["pinMessage"] = $true }
+
+    # Category actions
+    if ($Rule.ApplyCategory) { $actions["assignCategories"] = @($Rule.ApplyCategory) }
+    if ($Rule.ApplySystemCategory) { $actions["applySystemCategory"] = $Rule.ApplySystemCategory }
+    if ($Rule.DeleteSystemCategory) { $actions["deleteSystemCategory"] = $Rule.DeleteSystemCategory }
+
+    # Forward/Redirect actions
     if ($Rule.ForwardTo) { $actions["forwardTo"] = @($Rule.ForwardTo) }
     if ($Rule.RedirectTo) { $actions["redirectTo"] = @($Rule.RedirectTo) }
     if ($Rule.ForwardAsAttachmentTo) { $actions["forwardAsAttachmentTo"] = @($Rule.ForwardAsAttachmentTo) }
+
+    # Processing control
+    if ($Rule.StopProcessingRules) { $actions["stopProcessingRules"] = $true }
 
     # Create safe ID from name
     $safeId = ($Rule.Name -replace '[^a-zA-Z0-9-]', '-').ToLower()
@@ -1250,6 +1492,329 @@ function Invoke-CategoriesOperation {
 }
 
 # ---------------------------
+# MAILBOX SETTINGS OPERATIONS
+# ---------------------------
+
+function Invoke-OutOfOfficeOperation {
+    param(
+        [Nullable[bool]]$Enabled,
+        [string]$InternalMessage,
+        [string]$ExternalMessage,
+        [datetime]$StartDate,
+        [datetime]$EndDate,
+        [switch]$ForceFlag
+    )
+
+    Test-ExchangeConnection
+
+    # Check if we're viewing or setting
+    $isSettingOOO = $null -ne $Enabled -or $InternalMessage -or $ExternalMessage -or $StartDate -or $EndDate
+
+    if (-not $isSettingOOO) {
+        # View current settings
+        Write-Host "`n=== Out-of-Office Settings ===" -ForegroundColor Cyan
+        Write-Verbose "Retrieving Out-of-Office configuration..."
+
+        try {
+            $ooo = Get-MailboxAutoReplyConfiguration -Identity (Get-ConnectionInformation | Select-Object -First 1).UserPrincipalName -ErrorAction Stop
+
+            Write-Host "`nStatus:" -ForegroundColor Yellow
+            $statusColor = switch ($ooo.AutoReplyState) {
+                "Enabled" { "Green" }
+                "Scheduled" { "Yellow" }
+                default { "Gray" }
+            }
+            Write-Host "  Auto-Reply State: $($ooo.AutoReplyState)" -ForegroundColor $statusColor
+
+            if ($ooo.AutoReplyState -eq "Scheduled") {
+                Write-Host "  Start Time:       $($ooo.StartTime)" -ForegroundColor Gray
+                Write-Host "  End Time:         $($ooo.EndTime)" -ForegroundColor Gray
+            }
+
+            Write-Host "`nInternal Message:" -ForegroundColor Yellow
+            if ($ooo.InternalMessage) {
+                # Strip HTML for display
+                $internalText = $ooo.InternalMessage -replace '<[^>]+>', '' -replace '&nbsp;', ' '
+                Write-Host "  $internalText" -ForegroundColor Gray
+            } else {
+                Write-Host "  (not set)" -ForegroundColor Gray
+            }
+
+            Write-Host "`nExternal Message:" -ForegroundColor Yellow
+            Write-Host "  External Audience: $($ooo.ExternalAudience)" -ForegroundColor Gray
+            if ($ooo.ExternalMessage) {
+                $externalText = $ooo.ExternalMessage -replace '<[^>]+>', '' -replace '&nbsp;', ' '
+                Write-Host "  $externalText" -ForegroundColor Gray
+            } else {
+                Write-Host "  (not set)" -ForegroundColor Gray
+            }
+
+            Write-Host "`nTo modify, use parameters:" -ForegroundColor Cyan
+            Write-Host "  -OOOEnabled `$true/`$false" -ForegroundColor Gray
+            Write-Host "  -OOOInternal 'message'" -ForegroundColor Gray
+            Write-Host "  -OOOExternal 'message'" -ForegroundColor Gray
+            Write-Host "  -OOOStartDate '2024-01-15'" -ForegroundColor Gray
+            Write-Host "  -OOOEndDate '2024-01-20'" -ForegroundColor Gray
+        } catch {
+            Write-Host "ERROR: Failed to retrieve Out-of-Office settings: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    } else {
+        # Set OOO settings
+        Write-Host "`n=== Setting Out-of-Office ===" -ForegroundColor Cyan
+
+        $setParams = @{}
+        $identity = (Get-ConnectionInformation | Select-Object -First 1).UserPrincipalName
+
+        if ($null -ne $Enabled) {
+            if ($Enabled -and $StartDate -and $EndDate) {
+                $setParams["AutoReplyState"] = "Scheduled"
+                $setParams["StartTime"] = $StartDate
+                $setParams["EndTime"] = $EndDate
+            } elseif ($Enabled) {
+                $setParams["AutoReplyState"] = "Enabled"
+            } else {
+                $setParams["AutoReplyState"] = "Disabled"
+            }
+        }
+
+        if ($InternalMessage) {
+            $setParams["InternalMessage"] = $InternalMessage
+        }
+
+        if ($ExternalMessage) {
+            $setParams["ExternalMessage"] = $ExternalMessage
+            $setParams["ExternalAudience"] = "All"  # Send to all external senders
+        }
+
+        if (-not $ForceFlag -and $setParams.Count -gt 0) {
+            Write-Host "This will update Out-of-Office settings:" -ForegroundColor Yellow
+            $setParams.GetEnumerator() | ForEach-Object {
+                Write-Host "  $($_.Key): $($_.Value)" -ForegroundColor Gray
+            }
+            $confirm = Read-Host "Continue? (y/N)"
+            if ($confirm -ne 'y') {
+                Write-Host "Cancelled." -ForegroundColor Yellow
+                return
+            }
+        }
+
+        try {
+            Set-MailboxAutoReplyConfiguration -Identity $identity @setParams -ErrorAction Stop
+            Write-Host "Out-of-Office settings updated successfully." -ForegroundColor Green
+            Write-OperationLog -Operation "OutOfOffice-Set" -RuleName $null -Result "Success" -Details ($setParams | ConvertTo-Json -Compress)
+        } catch {
+            Write-Host "ERROR: Failed to set Out-of-Office: $($_.Exception.Message)" -ForegroundColor Red
+            Write-OperationLog -Operation "OutOfOffice-Set" -RuleName $null -Result "Failure" -Details $_.Exception.Message
+        }
+    }
+}
+
+function Invoke-ForwardingOperation {
+    param(
+        [string]$Address,
+        [Nullable[bool]]$Enabled,
+        [Nullable[bool]]$KeepCopy,
+        [switch]$ForceFlag
+    )
+
+    Test-ExchangeConnection
+
+    # Check if we're viewing or setting
+    $isSettingForwarding = $Address -or $null -ne $Enabled -or $null -ne $KeepCopy
+
+    if (-not $isSettingForwarding) {
+        # View current settings
+        Write-Host "`n=== Mailbox Forwarding Settings ===" -ForegroundColor Cyan
+        Write-Verbose "Retrieving mailbox forwarding configuration..."
+
+        try {
+            $identity = (Get-ConnectionInformation | Select-Object -First 1).UserPrincipalName
+            $mailbox = Get-Mailbox -Identity $identity -ErrorAction Stop
+
+            Write-Host "`nForwarding Status:" -ForegroundColor Yellow
+
+            if ($mailbox.ForwardingSmtpAddress) {
+                Write-Host "  Forwarding To:     $($mailbox.ForwardingSmtpAddress)" -ForegroundColor Green
+                $deliverStatus = if ($mailbox.DeliverToMailboxAndForward) { "Yes" } else { "No" }
+                Write-Host "  Keep Copy:         $deliverStatus" -ForegroundColor Gray
+            } elseif ($mailbox.ForwardingAddress) {
+                Write-Host "  Forwarding To:     $($mailbox.ForwardingAddress)" -ForegroundColor Green
+                $deliverStatus = if ($mailbox.DeliverToMailboxAndForward) { "Yes" } else { "No" }
+                Write-Host "  Keep Copy:         $deliverStatus" -ForegroundColor Gray
+            } else {
+                Write-Host "  Forwarding:        Disabled" -ForegroundColor Gray
+            }
+
+            Write-Host "`nTo modify, use parameters:" -ForegroundColor Cyan
+            Write-Host "  -ForwardingAddress 'user@example.com'" -ForegroundColor Gray
+            Write-Host "  -ForwardingEnabled `$true/`$false" -ForegroundColor Gray
+            Write-Host "  -DeliverToMailbox `$true  # Keep a copy" -ForegroundColor Gray
+        } catch {
+            Write-Host "ERROR: Failed to retrieve forwarding settings: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    } else {
+        # Set forwarding
+        Write-Host "`n=== Setting Mailbox Forwarding ===" -ForegroundColor Cyan
+
+        $identity = (Get-ConnectionInformation | Select-Object -First 1).UserPrincipalName
+        $setParams = @{}
+
+        if ($null -ne $Enabled -and -not $Enabled) {
+            # Disable forwarding
+            $setParams["ForwardingSmtpAddress"] = $null
+            $setParams["ForwardingAddress"] = $null
+            Write-Host "Disabling forwarding..." -ForegroundColor Yellow
+        } elseif ($Address) {
+            $setParams["ForwardingSmtpAddress"] = "smtp:$Address"
+            Write-Host "Setting forwarding to: $Address" -ForegroundColor Yellow
+        }
+
+        if ($null -ne $KeepCopy) {
+            $setParams["DeliverToMailboxAndForward"] = $KeepCopy
+        }
+
+        if (-not $ForceFlag -and $setParams.Count -gt 0) {
+            Write-Host "`nWARNING: Forwarding emails has security implications." -ForegroundColor Red
+            Write-Host "Settings to apply:" -ForegroundColor Yellow
+            $setParams.GetEnumerator() | ForEach-Object {
+                Write-Host "  $($_.Key): $($_.Value)" -ForegroundColor Gray
+            }
+            $confirm = Read-Host "Continue? (y/N)"
+            if ($confirm -ne 'y') {
+                Write-Host "Cancelled." -ForegroundColor Yellow
+                return
+            }
+        }
+
+        try {
+            Set-Mailbox -Identity $identity @setParams -ErrorAction Stop
+            Write-Host "Forwarding settings updated successfully." -ForegroundColor Green
+            Write-OperationLog -Operation "Forwarding-Set" -RuleName $null -Result "Success" -Details ($setParams | ConvertTo-Json -Compress)
+        } catch {
+            Write-Host "ERROR: Failed to set forwarding: $($_.Exception.Message)" -ForegroundColor Red
+            Write-OperationLog -Operation "Forwarding-Set" -RuleName $null -Result "Failure" -Details $_.Exception.Message
+        }
+    }
+}
+
+function Invoke-JunkMailOperation {
+    param(
+        [string[]]$AddSafeSenders,
+        [string[]]$AddBlockedSenders,
+        [string[]]$AddSafeRecipients,
+        [switch]$ForceFlag
+    )
+
+    Test-ExchangeConnection
+
+    # Check if we're viewing or setting
+    $isSettingJunk = $AddSafeSenders -or $AddBlockedSenders -or $AddSafeRecipients
+
+    if (-not $isSettingJunk) {
+        # View current settings
+        Write-Host "`n=== Junk Mail Settings ===" -ForegroundColor Cyan
+        Write-Verbose "Retrieving junk mail configuration..."
+
+        try {
+            $identity = (Get-ConnectionInformation | Select-Object -First 1).UserPrincipalName
+            $junk = Get-MailboxJunkEmailConfiguration -Identity $identity -ErrorAction Stop
+
+            Write-Host "`nJunk Filter Status:" -ForegroundColor Yellow
+            $enabledStatus = if ($junk.Enabled) { "Enabled" } else { "Disabled" }
+            Write-Host "  Junk Filter:         $enabledStatus" -ForegroundColor $(if ($junk.Enabled) { "Green" } else { "Gray" })
+            Write-Host "  Trust Contacts:      $($junk.ContactsTrusted)" -ForegroundColor Gray
+            Write-Host "  Trust Safe Lists:    $($junk.TrustedListsOnly)" -ForegroundColor Gray
+
+            Write-Host "`nSafe Senders ($($junk.TrustedSendersAndDomains.Count)):" -ForegroundColor Yellow
+            if ($junk.TrustedSendersAndDomains.Count -eq 0) {
+                Write-Host "  (none)" -ForegroundColor Gray
+            } else {
+                $junk.TrustedSendersAndDomains | Select-Object -First 10 | ForEach-Object {
+                    Write-Host "  - $_" -ForegroundColor Gray
+                }
+                if ($junk.TrustedSendersAndDomains.Count -gt 10) {
+                    Write-Host "  ... and $($junk.TrustedSendersAndDomains.Count - 10) more" -ForegroundColor Gray
+                }
+            }
+
+            Write-Host "`nBlocked Senders ($($junk.BlockedSendersAndDomains.Count)):" -ForegroundColor Yellow
+            if ($junk.BlockedSendersAndDomains.Count -eq 0) {
+                Write-Host "  (none)" -ForegroundColor Gray
+            } else {
+                $junk.BlockedSendersAndDomains | Select-Object -First 10 | ForEach-Object {
+                    Write-Host "  - $_" -ForegroundColor Red
+                }
+                if ($junk.BlockedSendersAndDomains.Count -gt 10) {
+                    Write-Host "  ... and $($junk.BlockedSendersAndDomains.Count - 10) more" -ForegroundColor Gray
+                }
+            }
+
+            Write-Host "`nSafe Recipients ($($junk.TrustedRecipientsAndDomains.Count)):" -ForegroundColor Yellow
+            if ($junk.TrustedRecipientsAndDomains.Count -eq 0) {
+                Write-Host "  (none)" -ForegroundColor Gray
+            } else {
+                $junk.TrustedRecipientsAndDomains | Select-Object -First 10 | ForEach-Object {
+                    Write-Host "  - $_" -ForegroundColor Gray
+                }
+                if ($junk.TrustedRecipientsAndDomains.Count -gt 10) {
+                    Write-Host "  ... and $($junk.TrustedRecipientsAndDomains.Count - 10) more" -ForegroundColor Gray
+                }
+            }
+
+            Write-Host "`nTo modify, use parameters:" -ForegroundColor Cyan
+            Write-Host "  -SafeSenders 'user@example.com','domain.com'" -ForegroundColor Gray
+            Write-Host "  -BlockedSenders 'spam@example.com'" -ForegroundColor Gray
+            Write-Host "  -SafeRecipients 'list@example.com'" -ForegroundColor Gray
+        } catch {
+            Write-Host "ERROR: Failed to retrieve junk mail settings: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    } else {
+        # Set junk mail settings
+        Write-Host "`n=== Updating Junk Mail Settings ===" -ForegroundColor Cyan
+
+        $identity = (Get-ConnectionInformation | Select-Object -First 1).UserPrincipalName
+
+        try {
+            $current = Get-MailboxJunkEmailConfiguration -Identity $identity -ErrorAction Stop
+            $setParams = @{}
+
+            if ($AddSafeSenders) {
+                $newSafe = @($current.TrustedSendersAndDomains) + $AddSafeSenders | Select-Object -Unique
+                $setParams["TrustedSendersAndDomains"] = $newSafe
+                Write-Host "Adding to safe senders: $($AddSafeSenders -join ', ')" -ForegroundColor Green
+            }
+
+            if ($AddBlockedSenders) {
+                $newBlocked = @($current.BlockedSendersAndDomains) + $AddBlockedSenders | Select-Object -Unique
+                $setParams["BlockedSendersAndDomains"] = $newBlocked
+                Write-Host "Adding to blocked senders: $($AddBlockedSenders -join ', ')" -ForegroundColor Red
+            }
+
+            if ($AddSafeRecipients) {
+                $newRecipients = @($current.TrustedRecipientsAndDomains) + $AddSafeRecipients | Select-Object -Unique
+                $setParams["TrustedRecipientsAndDomains"] = $newRecipients
+                Write-Host "Adding to safe recipients: $($AddSafeRecipients -join ', ')" -ForegroundColor Green
+            }
+
+            if (-not $ForceFlag -and $setParams.Count -gt 0) {
+                $confirm = Read-Host "Continue? (y/N)"
+                if ($confirm -ne 'y') {
+                    Write-Host "Cancelled." -ForegroundColor Yellow
+                    return
+                }
+            }
+
+            Set-MailboxJunkEmailConfiguration -Identity $identity @setParams -ErrorAction Stop
+            Write-Host "Junk mail settings updated successfully." -ForegroundColor Green
+            Write-OperationLog -Operation "JunkMail-Set" -RuleName $null -Result "Success" -Details "Updated junk mail lists"
+        } catch {
+            Write-Host "ERROR: Failed to set junk mail settings: $($_.Exception.Message)" -ForegroundColor Red
+            Write-OperationLog -Operation "JunkMail-Set" -RuleName $null -Result "Failure" -Details $_.Exception.Message
+        }
+    }
+}
+
+# ---------------------------
 # MAIN
 # ---------------------------
 
@@ -1281,6 +1846,20 @@ switch ($Operation) {
     # Folder operations
     "Folders"    { Invoke-FoldersOperation }
     "Stats"      { Invoke-StatsOperation }
+
+    # Mailbox settings operations
+    "OutOfOffice" {
+        Invoke-OutOfOfficeOperation -Enabled $OOOEnabled -InternalMessage $OOOInternal `
+            -ExternalMessage $OOOExternal -StartDate $OOOStartDate -EndDate $OOOEndDate -ForceFlag:$Force
+    }
+    "Forwarding" {
+        Invoke-ForwardingOperation -Address $ForwardingAddress -Enabled $ForwardingEnabled `
+            -KeepCopy $DeliverToMailbox -ForceFlag:$Force
+    }
+    "JunkMail" {
+        Invoke-JunkMailOperation -AddSafeSenders $SafeSenders -AddBlockedSenders $BlockedSenders `
+            -AddSafeRecipients $SafeRecipients -ForceFlag:$Force
+    }
 
     # Utility operations
     "Validate"   { Invoke-ValidateOperation }
