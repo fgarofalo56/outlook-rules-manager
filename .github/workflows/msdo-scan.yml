@@ -31,11 +31,13 @@ jobs:
         uses: microsoft/security-devops-action@v1
         id: msdo
         with:
-          # Categories to run (all available for comprehensive scan)
-          categories: 'secrets,code'
+          # Categories to run
+          categories: 'code'
 
           # Tools to run
-          tools: 'credscan,terrascan,templateanalyzer'
+          # Note: credscan excluded - requires .NET 6.0 not available on latest runners
+          # Secret detection handled by Gitleaks in security-scan.yml
+          tools: 'terrascan,templateanalyzer'
 
       - name: Upload SARIF results
         uses: github/codeql-action/upload-sarif@v3
