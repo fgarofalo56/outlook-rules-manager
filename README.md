@@ -363,6 +363,61 @@ For Azure AD admin consent requests, this application follows the **Shadow Org S
 | 📄 [docs/SDL.md](docs/SDL.md) | SDL compliance, security controls, threat model |
 | 📄 [docs/SECURITY-QUESTIONNAIRE.md](docs/SECURITY-QUESTIONNAIRE.md) | Highly Confidential permissions questionnaire |
 
+### 🛡️ Pre-Commit Security Checks
+
+This repository includes comprehensive security scanning to prevent accidental credential/PII exposure.
+
+#### Local Pre-Commit Check (Recommended)
+
+Run before every commit:
+
+```powershell
+.\scripts\Check-BeforeCommit.ps1
+```
+
+This checks for:
+- 📧 Email addresses (blocks real domains like @microsoft.com, @gmail.com)
+- 🔑 Azure GUIDs (Tenant IDs, Client IDs)
+- 🔐 Secrets and credentials
+- 📁 Blocked files (.env, app-config.json, rules-config.json)
+
+#### Pre-Commit Hooks (Automatic)
+
+For automatic checks on every commit:
+
+```bash
+# Install pre-commit (requires Python)
+pip install pre-commit
+
+# Install hooks
+pre-commit install
+
+# Manual run
+pre-commit run --all-files
+```
+
+#### GitHub Actions Security Scan
+
+Every push triggers comprehensive scanning:
+
+| Scan | Description |
+|:-----|:------------|
+| 🔐 **Secret Detection** | Gitleaks with custom rules for Azure patterns |
+| 🔍 **PII Detection** | Scans for email addresses and personal info |
+| 📜 **PSScriptAnalyzer** | PowerShell security and code quality |
+| 📁 **Blocked Files** | Prevents sensitive files from being committed |
+
+See workflow results: [GitHub Actions](../../actions)
+
+#### What Gets Blocked
+
+| Pattern | Example | Allowed Alternative |
+|:--------|:--------|:--------------------|
+| Real email domains | `user@microsoft.com` | `user@example.com` |
+| Azure GUIDs | `a1b2c3d4-...` | `00000000-0000-0000-0000-000000000000` |
+| Client secrets | `OJP8Q~Ye...` | Use `.env` file (gitignored) |
+| Config files | `.env`, `app-config.json` | `.env.example` templates |
+
 ---
 
 ## 🔧 Troubleshooting

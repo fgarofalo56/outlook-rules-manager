@@ -1,8 +1,14 @@
 # Security Scanning Workflow
-# Runs PSScriptAnalyzer for PowerShell code quality and security
-# Runs credential/secret scanning
+# Comprehensive security scanning for credentials, secrets, PII, and code quality
+#
+# Scans for:
+# - Hardcoded credentials and secrets
+# - Azure tenant/client IDs
+# - Email addresses and personal information
+# - PowerShell security issues
+# - Common vulnerability patterns
 
-name: Security Scan
+name: 🔒 Security Scan
 
 on:
   push:
@@ -18,10 +24,165 @@ permissions:
   contents: read
   security-events: write
 
+env:
+  # Patterns that should NEVER appear in committed code
+  BLOCKED_PATTERNS: |
+    @microsoft\.com
+    @limitlessdata\.ai
+    @housegarofalo\.com
+
 jobs:
-  # PSScriptAnalyzer - PowerShell static analysis
+  # ============================================
+  # SECRET DETECTION - Gitleaks with custom config
+  # ============================================
+  secret-scan:
+    name: 🔐 Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks with custom config
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+        continue-on-error: false
+
+  # ============================================
+  # PII DETECTION - Personal Information
+  # ============================================
+  pii-scan:
+    name: 🔍 PII Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for email addresses
+        run: |
+          echo "🔍 Scanning for email addresses..."
+
+          # Patterns to block (real email domains)
+          BLOCKED_DOMAINS=(
+            "microsoft.com"
+            "limitlessdata.ai"
+            "housegarofalo.com"
+            "outlook.com"
+            "hotmail.com"
+            "live.com"
+            "gmail.com"
+          )
+
+          # Allowed example domains
+          ALLOWED_DOMAINS=(
+            "example.com"
+            "company.com"
+            "domain.com"
+            "contoso.com"
+            "fabrikam.com"
+          )
+
+          FOUND_PII=0
+
+          for domain in "${BLOCKED_DOMAINS[@]}"; do
+            echo "Checking for @$domain..."
+            # Search in code files, exclude example files and docs
+            MATCHES=$(grep -rn "@$domain" --include="*.ps1" --include="*.json" . 2>/dev/null | grep -v "example" | grep -v "SECURITY-QUESTIONNAIRE" | grep -v "\.md:" || true)
+            if [ -n "$MATCHES" ]; then
+              echo "❌ BLOCKED: Found @$domain email(s):"
+              echo "$MATCHES"
+              FOUND_PII=1
+            fi
+          done
+
+          if [ $FOUND_PII -eq 1 ]; then
+            echo ""
+            echo "::error::PII DETECTED - Email addresses found in code!"
+            echo "::error::Please remove personal email addresses before committing."
+            exit 1
+          else
+            echo "✅ No blocked email domains found"
+          fi
+
+      - name: Check for Azure GUIDs in code
+        run: |
+          echo "🔍 Scanning for Azure GUIDs..."
+
+          GUID_PATTERN='[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+          PLACEHOLDER_GUID='00000000-0000-0000-0000-000000000000'
+
+          FOUND_GUIDS=0
+
+          # Check PowerShell files for GUIDs (excluding placeholder)
+          echo "Checking .ps1 files..."
+          for file in $(find . -name "*.ps1" -type f); do
+            MATCHES=$(grep -nE "$GUID_PATTERN" "$file" 2>/dev/null | grep -v "$PLACEHOLDER_GUID" | grep -v "example" || true)
+            if [ -n "$MATCHES" ]; then
+              echo "⚠️ WARNING: GUID found in $file:"
+              echo "$MATCHES"
+              # Don't fail for now, just warn
+            fi
+          done
+
+          # Check JSON files (but not example files)
+          echo "Checking .json files..."
+          for file in $(find . -name "*.json" -type f | grep -v "example"); do
+            # Skip if file doesn't exist
+            [ -f "$file" ] || continue
+            MATCHES=$(grep -nE "$GUID_PATTERN" "$file" 2>/dev/null | grep -v "$PLACEHOLDER_GUID" || true)
+            if [ -n "$MATCHES" ]; then
+              echo "❌ BLOCKED: GUID found in $file:"
+              echo "$MATCHES"
+              FOUND_GUIDS=1
+            fi
+          done
+
+          if [ $FOUND_GUIDS -eq 1 ]; then
+            echo ""
+            echo "::error::Azure GUIDs (Tenant/Client IDs) detected in tracked files!"
+            echo "::error::Please use placeholder GUIDs or move to .env files."
+            exit 1
+          else
+            echo "✅ No exposed Azure GUIDs found"
+          fi
+
+      - name: Check for blocked files
+        run: |
+          echo "🔍 Checking for files that should not be committed..."
+
+          BLOCKED_FILES=(
+            ".env"
+            "app-config.json"
+            "rules-config.json"
+            "demo.env"
+          )
+
+          FOUND_BLOCKED=0
+
+          for file in "${BLOCKED_FILES[@]}"; do
+            if git ls-files --error-unmatch "$file" 2>/dev/null; then
+              echo "❌ BLOCKED: $file is tracked in git!"
+              FOUND_BLOCKED=1
+            fi
+          done
+
+          if [ $FOUND_BLOCKED -eq 1 ]; then
+            echo ""
+            echo "::error::Sensitive files detected in repository!"
+            echo "::error::Remove with: git rm --cached <filename>"
+            exit 1
+          else
+            echo "✅ No blocked files found in repository"
+          fi
+
+  # ============================================
+  # POWERSHELL SECURITY ANALYSIS
+  # ============================================
   powershell-analysis:
-    name: PSScriptAnalyzer
+    name: 📜 PSScriptAnalyzer
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -30,10 +191,12 @@ jobs:
       - name: Run PSScriptAnalyzer
         shell: pwsh
         run: |
-          # Install PSScriptAnalyzer if not present
+          # Install PSScriptAnalyzer
           if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
             Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
           }
+
+          Write-Host "🔍 Running PSScriptAnalyzer..." -ForegroundColor Cyan
 
           # Run analysis on all PowerShell files
           $results = Get-ChildItem -Path . -Include *.ps1,*.psm1,*.psd1 -Recurse |
@@ -48,104 +211,83 @@ jobs:
             # Count errors
             $errors = $results | Where-Object { $_.Severity -eq 'Error' }
             if ($errors.Count -gt 0) {
-              Write-Error "Found $($errors.Count) error(s) in PowerShell scripts"
+              Write-Error "❌ Found $($errors.Count) error(s) in PowerShell scripts"
               exit 1
+            } else {
+              Write-Host "⚠️ Found $($results.Count) warning(s)" -ForegroundColor Yellow
             }
           } else {
-            Write-Host "No issues found!" -ForegroundColor Green
+            Write-Host "✅ No issues found!" -ForegroundColor Green
           }
 
-      - name: Generate SARIF report
+      - name: Check for hardcoded values
+        shell: pwsh
+        run: |
+          Write-Host "🔍 Checking for hardcoded sensitive values..." -ForegroundColor Cyan
+
+          $patterns = @{
+            "Hardcoded GUID" = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+            "Email Address" = '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|org|net|io)'
+            "Client Secret" = 'client.*secret.*=.*[A-Za-z0-9~._-]{20,}'
+          }
+
+          $issues = @()
+
+          foreach ($file in Get-ChildItem -Path . -Include *.ps1 -Recurse) {
+            $content = Get-Content $file.FullName -Raw
+
+            foreach ($patternName in $patterns.Keys) {
+              $matches = [regex]::Matches($content, $patterns[$patternName])
+              foreach ($match in $matches) {
+                # Skip placeholder values
+                if ($match.Value -notmatch '00000000-0000-0000-0000-000000000000' -and
+                    $match.Value -notmatch 'example\.com' -and
+                    $match.Value -notmatch 'contoso\.com' -and
+                    $match.Value -notmatch 'company\.com') {
+                  $issues += [PSCustomObject]@{
+                    File = $file.Name
+                    Pattern = $patternName
+                    Value = $match.Value.Substring(0, [Math]::Min(50, $match.Value.Length)) + "..."
+                  }
+                }
+              }
+            }
+          }
+
+          if ($issues.Count -gt 0) {
+            Write-Host "⚠️ Potential sensitive values found:" -ForegroundColor Yellow
+            $issues | Format-Table -AutoSize
+            Write-Host "Please review these findings." -ForegroundColor Yellow
+          } else {
+            Write-Host "✅ No hardcoded sensitive values detected" -ForegroundColor Green
+          }
+
+      - name: Generate analysis report
         if: always()
         shell: pwsh
         run: |
-          # Install PSScriptAnalyzer if not present
-          if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
-            Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
-          }
-
-          # Create output directory
           New-Item -ItemType Directory -Path sarif-results -Force | Out-Null
 
-          # Run analysis and export as SARIF (if supported)
           $results = Get-ChildItem -Path . -Include *.ps1,*.psm1,*.psd1 -Recurse |
             ForEach-Object {
               Invoke-ScriptAnalyzer -Path $_.FullName -Severity Information,Warning,Error
             }
 
-          # Convert to simple JSON for review
           $results | ConvertTo-Json -Depth 5 | Set-Content -Path sarif-results/psscriptanalyzer-results.json
 
       - name: Upload analysis results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: psscriptanalyzer-results
+          name: security-scan-results
           path: sarif-results/
           retention-days: 30
 
-  # Secret scanning - check for accidentally committed credentials
-  secret-scan:
-    name: Secret Detection
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
-        continue-on-error: true
-
-      - name: Check for common credential patterns
-        shell: bash
-        run: |
-          echo "Checking for credential patterns..."
-
-          # Patterns to check (case insensitive)
-          PATTERNS=(
-            "password\s*=\s*['\"][^'\"]+['\"]"
-            "secret\s*=\s*['\"][^'\"]+['\"]"
-            "api[_-]?key\s*=\s*['\"][^'\"]+['\"]"
-            "[a-zA-Z0-9]{32,}"  # Long alphanumeric strings (potential tokens)
-          )
-
-          FOUND=0
-
-          for pattern in "${PATTERNS[@]}"; do
-            # Search in tracked files only, exclude example files
-            if grep -riE "$pattern" --include="*.ps1" --include="*.json" . 2>/dev/null | grep -v "example" | grep -v ".github"; then
-              echo "WARNING: Potential credential pattern found!"
-              FOUND=1
-            fi
-          done
-
-          # Check for real GUIDs in non-example files (potential tenant/client IDs)
-          echo "Checking for GUIDs in tracked files..."
-          GUID_PATTERN='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-
-          # These files should NOT contain real GUIDs
-          for file in *.ps1 docs/*.md; do
-            if [ -f "$file" ]; then
-              if grep -iE "$GUID_PATTERN" "$file" 2>/dev/null; then
-                echo "INFO: GUID found in $file - verify this is intentional"
-              fi
-            fi
-          done
-
-          if [ $FOUND -eq 1 ]; then
-            echo "::warning::Potential credentials detected. Please review."
-          else
-            echo "No obvious credential patterns found."
-          fi
-
-  # Dependency review (for future npm/nuget additions)
+  # ============================================
+  # DEPENDENCY REVIEW (for PRs)
+  # ============================================
   dependency-review:
-    name: Dependency Review
+    name: 📦 Dependency Review
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
@@ -155,3 +297,44 @@ jobs:
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
         continue-on-error: true
+
+  # ============================================
+  # SUMMARY JOB
+  # ============================================
+  security-summary:
+    name: 📊 Security Summary
+    runs-on: ubuntu-latest
+    needs: [secret-scan, pii-scan, powershell-analysis]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.secret-scan.result }}" == "success" ]; then
+            echo "✅ Secret Detection: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Secret Detection: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.pii-scan.result }}" == "success" ]; then
+            echo "✅ PII Detection: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ PII Detection: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.powershell-analysis.result }}" == "success" ]; then
+            echo "✅ PowerShell Analysis: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ PowerShell Analysis: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "For details, check individual job logs." >> $GITHUB_STEP_SUMMARY
+
+          # Fail if any critical job failed
+          if [ "${{ needs.secret-scan.result }}" == "failure" ] || [ "${{ needs.pii-scan.result }}" == "failure" ]; then
+            echo "::error::Security scan failed - credentials or PII detected!"
+            exit 1
+          fi

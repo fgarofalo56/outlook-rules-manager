@@ -1,0 +1,75 @@
+# Pre-commit hooks for Outlook Rules Manager
+# Prevents committing credentials, secrets, tenant info, and personal data
+#
+# Installation:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Manual run:
+#   pre-commit run --all-files
+
+repos:
+  # Gitleaks - Secret Detection
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+        name: 🔐 Gitleaks - Detect secrets
+        description: Detect hardcoded secrets, credentials, and PII
+        args: ["--config", ".gitleaks.toml", "--verbose"]
+
+  # Check for large files
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-added-large-files
+        name: 📦 Check for large files
+        args: ["--maxkb=500"]
+
+      - id: check-case-conflict
+        name: 📁 Check case conflicts
+
+      - id: check-merge-conflict
+        name: 🔀 Check merge conflicts
+
+      - id: detect-private-key
+        name: 🔑 Detect private keys
+
+      - id: end-of-file-fixer
+        name: 📝 Fix end of files
+        exclude: '\.json$'
+
+      - id: trailing-whitespace
+        name: ✂️ Trim trailing whitespace
+        exclude: '\.md$'
+
+  # Check JSON files
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-json
+        name: 📄 Validate JSON files
+        exclude: '\.example\.json$'
+
+# Local hooks for custom checks
+  - repo: local
+    hooks:
+      - id: check-env-files
+        name: 🚫 Block .env files
+        entry: bash -c 'echo "ERROR: .env files should not be committed!" && exit 1'
+        language: system
+        files: '^\.env$|^.*\.env$'
+        exclude: '\.env\.example$'
+
+      - id: check-app-config
+        name: 🚫 Block app-config.json
+        entry: bash -c 'echo "ERROR: app-config.json should not be committed!" && exit 1'
+        language: system
+        files: 'app-config\.json$'
+
+      - id: check-rules-config
+        name: 🚫 Block rules-config.json
+        entry: bash -c 'echo "ERROR: rules-config.json contains personal data!" && exit 1'
+        language: system
+        files: '^rules-config\.json$'
+        exclude: 'rules-config\.example\.json$'

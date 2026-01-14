@@ -1,0 +1,106 @@
+# Gitleaks Configuration for Outlook Rules Manager
+# Prevents committing credentials, secrets, tenant info, and personal data
+
+title = "Outlook Rules Manager - Security Scanning"
+
+[extend]
+# Extend the default gitleaks rules
+useDefault = true
+
+# ===========================================
+# CUSTOM RULES - Azure/Microsoft Specific
+# ===========================================
+
+[[rules]]
+id = "azure-tenant-id"
+description = "Azure Tenant ID (GUID format)"
+regex = '''(?i)(tenant[-_]?id|tenantid)\s*[=:]\s*["']?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})["']?'''
+tags = ["azure", "tenant", "pii"]
+
+[[rules]]
+id = "azure-client-id"
+description = "Azure Client/Application ID (GUID format)"
+regex = '''(?i)(client[-_]?id|clientid|app[-_]?id|application[-_]?id)\s*[=:]\s*["']?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})["']?'''
+tags = ["azure", "credentials"]
+
+[[rules]]
+id = "azure-client-secret"
+description = "Azure Client Secret"
+regex = '''(?i)(client[-_]?secret|clientsecret)\s*[=:]\s*["']?[A-Za-z0-9~._-]{30,}["']?'''
+tags = ["azure", "secret", "credentials"]
+
+[[rules]]
+id = "azure-subscription-id"
+description = "Azure Subscription ID (GUID format)"
+regex = '''(?i)(subscription[-_]?id|subscriptionid)\s*[=:]\s*["']?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})["']?'''
+tags = ["azure", "subscription"]
+
+# ===========================================
+# CUSTOM RULES - Personal Information (PII)
+# ===========================================
+
+[[rules]]
+id = "email-address"
+description = "Email address (potential PII)"
+regex = '''[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|org|net|edu|gov|mil|io|co|us|uk|ca|au|de|fr|microsoft\.com)'''
+tags = ["pii", "email"]
+# Allow example emails
+[rules.allowlist]
+regexes = [
+    '''example\.com''',
+    '''company\.com''',
+    '''domain\.com''',
+    '''contoso\.com''',
+    '''fabrikam\.com''',
+    '''example@''',
+    '''user@''',
+    '''test@''',
+    '''placeholder''',
+    '''YOUR_'''
+]
+
+[[rules]]
+id = "microsoft-alias"
+description = "Microsoft employee alias pattern"
+regex = '''[a-z]{2,}@microsoft\.com'''
+tags = ["pii", "microsoft", "email"]
+
+# ===========================================
+# CUSTOM RULES - API Keys & Tokens
+# ===========================================
+
+[[rules]]
+id = "bearer-token"
+description = "Bearer Token"
+regex = '''(?i)bearer\s+[a-zA-Z0-9_\-\.=]+'''
+tags = ["token", "credentials"]
+
+[[rules]]
+id = "oauth-token"
+description = "OAuth Access Token"
+regex = '''(?i)(access[-_]?token|oauth[-_]?token)\s*[=:]\s*["']?[A-Za-z0-9_\-\.]{20,}["']?'''
+tags = ["oauth", "token", "credentials"]
+
+# ===========================================
+# GLOBAL ALLOWLIST
+# ===========================================
+
+[allowlist]
+description = "Global allowlist for false positives"
+paths = [
+    '''\.env\.example$''',
+    '''rules-config\.example\.json$''',
+    '''\.gitleaks\.toml$''',
+    '''\.md$''',  # Documentation files
+    '''\.github/.*\.yml$''',  # GitHub workflows (contain example patterns)
+]
+regexes = [
+    '''example\.com''',
+    '''company\.com''',
+    '''contoso\.com''',
+    '''fabrikam\.com''',
+    '''YOUR_.*''',
+    '''\[INSERT.*\]''',
+    '''<your-.*>''',
+    '''00000000-0000-0000-0000-000000000000''',  # Placeholder GUID
+]
