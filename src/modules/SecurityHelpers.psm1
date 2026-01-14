@@ -274,7 +274,7 @@ function Write-AuditLog {
     )
 
     if (-not $LogDirectory) {
-        $LogDirectory = Join-Path $PSScriptRoot "..\logs"
+        $LogDirectory = Join-Path $PSScriptRoot "..\..\logs"
     }
 
     # Create logs directory if it doesn't exist
@@ -322,7 +322,7 @@ function Get-AuditLogs {
     )
 
     if (-not $LogDirectory) {
-        $LogDirectory = Join-Path $PSScriptRoot "..\logs"
+        $LogDirectory = Join-Path $PSScriptRoot "..\..\logs"
     }
 
     if (-not (Test-Path $LogDirectory)) {

@@ -133,85 +133,85 @@
 ### Rule Operations
 ```powershell
 # List all rules
-.\Manage-OutlookRules.ps1 -Operation List
+.\src\Manage-OutlookRules.ps1 -Operation List
 
 # Show rule details
-.\Manage-OutlookRules.ps1 -Operation Show -RuleName "01 - Priority Senders"
+.\src\Manage-OutlookRules.ps1 -Operation Show -RuleName "01 - Priority Senders"
 
 # Deploy rules from config
-.\Manage-OutlookRules.ps1 -Operation Deploy
+.\src\Manage-OutlookRules.ps1 -Operation Deploy
 
 # Compare deployed vs config
-.\Manage-OutlookRules.ps1 -Operation Compare
+.\src\Manage-OutlookRules.ps1 -Operation Compare
 
 # Pull deployed rules into config
-.\Manage-OutlookRules.ps1 -Operation Pull
+.\src\Manage-OutlookRules.ps1 -Operation Pull
 
 # Backup rules
-.\Manage-OutlookRules.ps1 -Operation Backup
+.\src\Manage-OutlookRules.ps1 -Operation Backup
 
 # Enable/Disable rules
-.\Manage-OutlookRules.ps1 -Operation Enable -RuleName "MyRule"
-.\Manage-OutlookRules.ps1 -Operation Disable -RuleName "MyRule"
-.\Manage-OutlookRules.ps1 -Operation EnableAll
-.\Manage-OutlookRules.ps1 -Operation DisableAll
+.\src\Manage-OutlookRules.ps1 -Operation Enable -RuleName "MyRule"
+.\src\Manage-OutlookRules.ps1 -Operation Disable -RuleName "MyRule"
+.\src\Manage-OutlookRules.ps1 -Operation EnableAll
+.\src\Manage-OutlookRules.ps1 -Operation DisableAll
 ```
 
 ### Mailbox Settings Operations
 ```powershell
 # View Out-of-Office settings
-.\Manage-OutlookRules.ps1 -Operation OutOfOffice
+.\src\Manage-OutlookRules.ps1 -Operation OutOfOffice
 
 # Enable Out-of-Office
-.\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
+.\src\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
     -OOOInternal "I'm away from the office" `
     -OOOExternal "I'm currently out of office"
 
 # Schedule Out-of-Office
-.\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
+.\src\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
     -OOOStartDate "2024-12-23" -OOOEndDate "2024-12-27" `
     -OOOInternal "Away for the holidays"
 
 # Disable Out-of-Office
-.\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $false
+.\src\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $false
 
 # View forwarding settings
-.\Manage-OutlookRules.ps1 -Operation Forwarding
+.\src\Manage-OutlookRules.ps1 -Operation Forwarding
 
 # Enable forwarding
-.\Manage-OutlookRules.ps1 -Operation Forwarding `
+.\src\Manage-OutlookRules.ps1 -Operation Forwarding `
     -ForwardingAddress "backup@company.com" `
     -ForwardingEnabled $true `
     -DeliverToMailbox $true  # Keep a copy
 
 # Disable forwarding
-.\Manage-OutlookRules.ps1 -Operation Forwarding -ForwardingEnabled $false
+.\src\Manage-OutlookRules.ps1 -Operation Forwarding -ForwardingEnabled $false
 
 # View junk mail settings
-.\Manage-OutlookRules.ps1 -Operation JunkMail
+.\src\Manage-OutlookRules.ps1 -Operation JunkMail
 
 # Add safe senders
-.\Manage-OutlookRules.ps1 -Operation JunkMail `
+.\src\Manage-OutlookRules.ps1 -Operation JunkMail `
     -SafeSenders "trusted@company.com","partner.com"
 
 # Add blocked senders
-.\Manage-OutlookRules.ps1 -Operation JunkMail `
+.\src\Manage-OutlookRules.ps1 -Operation JunkMail `
     -BlockedSenders "spam@example.com"
 ```
 
 ### Utility Operations
 ```powershell
 # Validate rules for issues
-.\Manage-OutlookRules.ps1 -Operation Validate
+.\src\Manage-OutlookRules.ps1 -Operation Validate
 
 # View mailbox statistics
-.\Manage-OutlookRules.ps1 -Operation Stats
+.\src\Manage-OutlookRules.ps1 -Operation Stats
 
 # List inbox folders
-.\Manage-OutlookRules.ps1 -Operation Folders
+.\src\Manage-OutlookRules.ps1 -Operation Folders
 
 # List categories used
-.\Manage-OutlookRules.ps1 -Operation Categories
+.\src\Manage-OutlookRules.ps1 -Operation Categories
 ```
 
 ---

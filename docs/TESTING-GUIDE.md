@@ -47,7 +47,7 @@ This guide covers three testing scenarios:
 Connect-AzAccount -TenantId "<demo-tenant-id>"
 
 # Register app with custom name
-.\Register-OutlookRulesApp.ps1 -AppName "Outlook Rules Manager - Demo"
+.\src\Register-OutlookRulesApp.ps1 -AppName "Outlook Rules Manager - Demo"
 ```
 
 #### Option B: Manual (Azure Portal)
@@ -133,21 +133,21 @@ Copy-Item demo.env .env
 Copy-Item examples/rules-config.example.json rules-config.json
 
 # Connect
-.\Connect-OutlookRulesApp.ps1
+.\src\Connect-OutlookRulesApp.ps1
 
 # Deploy
-.\Manage-OutlookRules.ps1 -Operation Deploy
+.\src\Manage-OutlookRules.ps1 -Operation Deploy
 
 # Verify
-.\Manage-OutlookRules.ps1 -Operation List
-.\Manage-OutlookRules.ps1 -Operation Folders
+.\src\Manage-OutlookRules.ps1 -Operation List
+.\src\Manage-OutlookRules.ps1 -Operation Folders
 ```
 
 ### Step 5: Clean Up Demo Environment
 
 ```powershell
 # Remove all rules from demo
-.\Manage-OutlookRules.ps1 -Operation DeleteAll
+.\src\Manage-OutlookRules.ps1 -Operation DeleteAll
 
 # Restore production config (if applicable)
 Copy-Item .env.backup .env
@@ -199,8 +199,8 @@ Copy-Item .env.backup .env
 .\scripts\Check-BeforeCommit.ps1
 
 # 3. Test changes
-.\Connect-OutlookRulesApp.ps1
-.\Manage-OutlookRules.ps1 -Operation <your-operation>
+.\src\Connect-OutlookRulesApp.ps1
+.\src\Manage-OutlookRules.ps1 -Operation <your-operation>
 
 # 4. Verify no sensitive data
 git diff
@@ -216,7 +216,7 @@ git commit -m "Your commit message"
 
 ```powershell
 $VerbosePreference = "Continue"
-.\Connect-OutlookRulesApp.ps1
+.\src\Connect-OutlookRulesApp.ps1
 ```
 
 #### Check Module Versions
@@ -305,10 +305,10 @@ try {
 
 ```powershell
 # Step 1: Backup existing rules
-.\Manage-OutlookRules.ps1 -Operation Backup
+.\src\Manage-OutlookRules.ps1 -Operation Backup
 
 # Step 2: Delete all rules
-.\Manage-OutlookRules.ps1 -Operation DeleteAll -Force
+.\src\Manage-OutlookRules.ps1 -Operation DeleteAll -Force
 
 # Step 3: Verify deletion
 $rules = Get-InboxRule
@@ -317,14 +317,14 @@ if ($rules.Count -eq 0) {
 }
 
 # Step 4: Deploy from config
-.\Manage-OutlookRules.ps1 -Operation Deploy
+.\src\Manage-OutlookRules.ps1 -Operation Deploy
 
 # Step 5: Verify deployment
 $rules = Get-InboxRule
 Write-Host "Deployed $($rules.Count) rules"
 
 # Step 6: Compare config vs deployed
-.\Manage-OutlookRules.ps1 -Operation Compare
+.\src\Manage-OutlookRules.ps1 -Operation Compare
 ```
 
 #### Test 2: Folder Creation
@@ -338,7 +338,7 @@ $beforeFolders = Get-MgUserMailFolderChildFolder -UserId me -MailFolderId $inbox
 Write-Host "Folders before: $($beforeFolders.Count)"
 
 # Deploy (should create folders)
-.\Manage-OutlookRules.ps1 -Operation Deploy
+.\src\Manage-OutlookRules.ps1 -Operation Deploy
 
 # List child folders after
 $afterFolders = Get-MgUserMailFolderChildFolder -UserId me -MailFolderId $inbox.Id
@@ -397,7 +397,7 @@ foreach ($rule in $rules) {
 
    ```powershell
    # Check folder contents
-   .\Manage-OutlookRules.ps1 -Operation Folders
+   .\src\Manage-OutlookRules.ps1 -Operation Folders
    ```
 
 3. **Verify Actions**
@@ -591,10 +591,10 @@ Get-MgUserMailFolder -UserId me -MailFolderId Inbox    # Test folder access
 Get-InboxRule                              # Test rule access
 
 # Deployment tests
-.\Manage-OutlookRules.ps1 -Operation Compare    # Preview changes
-.\Manage-OutlookRules.ps1 -Operation Validate   # Check for issues
-.\Manage-OutlookRules.ps1 -Operation List       # View deployed rules
-.\Manage-OutlookRules.ps1 -Operation Folders    # View folders
+.\src\Manage-OutlookRules.ps1 -Operation Compare    # Preview changes
+.\src\Manage-OutlookRules.ps1 -Operation Validate   # Check for issues
+.\src\Manage-OutlookRules.ps1 -Operation List       # View deployed rules
+.\src\Manage-OutlookRules.ps1 -Operation Folders    # View folders
 
 # Security tests
 .\scripts\Check-BeforeCommit.ps1           # Security scan

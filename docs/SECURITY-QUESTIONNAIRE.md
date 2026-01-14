@@ -203,7 +203,7 @@ This application implements defense-in-depth authorization beyond basic permissi
 | 1️⃣ Authentication | OAuth 2.0 Device Code | User must authenticate via Azure AD |
 | 2️⃣ User Assignment | "Assignment Required" = Yes | Only assigned users can access |
 | 3️⃣ App Roles | OutlookRules.Admin / User | Role determines capabilities |
-| 4️⃣ Script Validation | Connect-OutlookRulesApp.ps1 | Validates role claims at runtime |
+| 4️⃣ Script Validation | src/Connect-OutlookRulesApp.ps1 | Validates role claims at runtime |
 
 #### App Roles Defined
 
@@ -226,10 +226,10 @@ This application implements defense-in-depth authorization beyond basic permissi
 
 ```powershell
 # Verify configuration
-.\Manage-AppAuthorization.ps1 -Operation Status
+.\src\Manage-AppAuthorization.ps1 -Operation Status
 
 # List authorized users
-.\Manage-AppAuthorization.ps1 -Operation List
+.\src\Manage-AppAuthorization.ps1 -Operation List
 ```
 
 ---

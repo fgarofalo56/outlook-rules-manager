@@ -280,8 +280,11 @@ Note: No admin consent required - you're consenting for your own mailbox only.
 
 Write-Host $configOutput -ForegroundColor White
 
-# Save to .env file (primary config)
-$envFile = Join-Path $PSScriptRoot ".env"
+# Project root is parent of src/ directory where this script lives
+$ProjectRoot = Split-Path $PSScriptRoot -Parent
+
+# Save to .env file at project root (primary config)
+$envFile = Join-Path $ProjectRoot ".env"
 $envContent = @"
 `$ClientId = "$($app.AppId)"
 `$TenantId = "$tenantIdResolved"
@@ -290,7 +293,7 @@ Set-Content -Path $envFile -Value $envContent
 Write-Host "Configuration saved to: $envFile" -ForegroundColor Cyan
 
 # Also save to JSON for backwards compatibility
-$configFile = Join-Path $PSScriptRoot "app-config.json"
+$configFile = Join-Path $ProjectRoot "app-config.json"
 @{
     AppName = $AppName
     ClientId = $app.AppId

@@ -150,7 +150,7 @@ param(
     [ValidateSet(
         "List", "Show", "Export", "Backup", "Import", "Compare", "Deploy", "Pull",
         "Enable", "Disable", "EnableAll", "DisableAll", "Delete", "DeleteAll",
-        "Folders", "Stats", "Validate", "Categories",
+        "Folders", "Stats", "Validate", "Categories", "AuditLog",
         "OutOfOffice", "Forwarding", "JunkMail"
     )]
     [string]$Operation,
@@ -210,25 +210,32 @@ param(
 )
 
 # ---------------------------
+# PATH RESOLUTION
+# ---------------------------
+
+# Project root is parent of src/ directory where this script lives
+$script:ProjectRoot = Split-Path $PSScriptRoot -Parent
+
+# ---------------------------
 # PROFILE RESOLUTION
 # ---------------------------
 
-# Set default paths based on ConfigProfile
+# Set default paths based on ConfigProfile (config files are at project root)
 if ($ConfigProfile) {
     if (-not $ConfigPath) {
-        $ConfigPath = Join-Path $PSScriptRoot "rules-config.$ConfigProfile.json"
+        $ConfigPath = Join-Path $script:ProjectRoot "rules-config.$ConfigProfile.json"
     }
     if (-not $ExportPath) {
-        $ExportPath = Join-Path $PSScriptRoot "exported-rules.$ConfigProfile.json"
+        $ExportPath = Join-Path $script:ProjectRoot "exported-rules.$ConfigProfile.json"
     }
     $script:ProfileDisplay = "[$ConfigProfile]"
     Write-Host "Using profile: $ConfigProfile" -ForegroundColor Cyan
 } else {
     if (-not $ConfigPath) {
-        $ConfigPath = Join-Path $PSScriptRoot "rules-config.json"
+        $ConfigPath = Join-Path $script:ProjectRoot "rules-config.json"
     }
     if (-not $ExportPath) {
-        $ExportPath = Join-Path $PSScriptRoot "exported-rules.json"
+        $ExportPath = Join-Path $script:ProjectRoot "exported-rules.json"
     }
     $script:ProfileDisplay = ""
 }
@@ -237,8 +244,8 @@ if ($ConfigProfile) {
 # SECURITY MODULE
 # ---------------------------
 
-# Import security helpers module
-$securityModule = Join-Path $PSScriptRoot "scripts\SecurityHelpers.psm1"
+# Import security helpers module (in src/modules/)
+$securityModule = Join-Path $PSScriptRoot "modules\SecurityHelpers.psm1"
 if (Test-Path $securityModule) {
     Import-Module $securityModule -Force -ErrorAction SilentlyContinue
     $script:SecurityModuleLoaded = $true
@@ -262,7 +269,7 @@ function Write-OperationLog {
 
     if ($script:EnableAuditLog -and $script:SecurityModuleLoaded) {
         try {
-            $logDir = Join-Path $PSScriptRoot "logs"
+            $logDir = Join-Path $script:ProjectRoot "logs"
             # SECURITY: Redact sensitive data (email addresses, GUIDs) from logs
             $safeDetails = if ($Details -and (Get-Command 'Protect-SensitiveLogData' -ErrorAction SilentlyContinue)) {
                 Protect-SensitiveLogData -Data $Details
@@ -1068,7 +1075,7 @@ function Invoke-BackupOperation {
     Write-Host "`n=== Creating Backup ===" -ForegroundColor Cyan
 
     # Create backups directory
-    $backupDir = Join-Path $PSScriptRoot "backups"
+    $backupDir = Join-Path $script:ProjectRoot "backups"
     Write-Verbose "Backup directory: $backupDir"
     if (-not (Test-Path $backupDir)) {
         Write-Verbose "Creating backup directory..."
@@ -1551,29 +1558,303 @@ function Invoke-ValidateOperation {
 function Invoke-CategoriesOperation {
     Test-ExchangeConnection
 
-    Write-Host "`n=== Outlook Categories ===" -ForegroundColor Cyan
+    Write-Host "`n=== Outlook Categories Management ===" -ForegroundColor Cyan
 
-    # Get categories used in rules
+    # 1. Get categories from config file (if exists)
+    $configCategories = @()
+    $configRuleCategories = @()
+    if (Test-Path $script:ConfigPath) {
+        try {
+            $config = Get-Content $script:ConfigPath -Raw | ConvertFrom-Json
+
+            # Categories defined in settings
+            if ($config.settings.categories) {
+                $config.settings.categories.PSObject.Properties | ForEach-Object {
+                    $configCategories += $_.Value
+                }
+            }
+
+            # Categories referenced in rules
+            foreach ($rule in $config.rules) {
+                if ($rule.actions.assignCategories) {
+                    foreach ($cat in $rule.actions.assignCategories) {
+                        if ($cat -is [string] -and $cat.StartsWith("@")) {
+                            # Resolve reference
+                            $resolved = Resolve-ConfigReferences -Config $config -Value $cat
+                            if ($resolved) { $configRuleCategories += $resolved }
+                        } else {
+                            $configRuleCategories += $cat
+                        }
+                    }
+                }
+            }
+            $configRuleCategories = $configRuleCategories | Select-Object -Unique
+        } catch {
+            Write-Verbose "Could not parse config file: $_"
+        }
+    }
+
+    # 2. Get categories used in deployed rules
     $rules = Get-RulesList
-    $usedCategories = @()
+    $deployedCategories = @()
     foreach ($rule in $rules) {
         if ($rule.ApplyCategory) {
-            $usedCategories += $rule.ApplyCategory
+            $deployedCategories += $rule.ApplyCategory
         }
     }
-    $usedCategories = $usedCategories | Select-Object -Unique
+    $deployedCategories = $deployedCategories | Select-Object -Unique
 
-    Write-Host "`nCategories used in rules:" -ForegroundColor Yellow
-    if ($usedCategories.Count -eq 0) {
-        Write-Host "  (none)" -ForegroundColor Gray
+    # 3. Combine all categories
+    $allCategories = ($configCategories + $configRuleCategories + $deployedCategories) | Select-Object -Unique | Sort-Object
+
+    # Display results
+    Write-Host "`n--- Categories Overview ---" -ForegroundColor Yellow
+
+    if ($allCategories.Count -eq 0) {
+        Write-Host "  No categories found in config or deployed rules." -ForegroundColor Gray
     } else {
-        $usedCategories | ForEach-Object {
-            Write-Host "  - $_" -ForegroundColor Cyan
+        Write-Host "`n  Category Name                    Config   Rules    Deployed" -ForegroundColor White
+        Write-Host "  $(('-' * 60))" -ForegroundColor Gray
+
+        foreach ($cat in $allCategories) {
+            $inConfig = if ($configCategories -contains $cat) { "[X]" } else { "[ ]" }
+            $inRules = if ($configRuleCategories -contains $cat) { "[X]" } else { "[ ]" }
+            $inDeployed = if ($deployedCategories -contains $cat) { "[X]" } else { "[ ]" }
+
+            $catDisplay = $cat.PadRight(35)
+            Write-Host "  $catDisplay $inConfig      $inRules      $inDeployed" -ForegroundColor Cyan
         }
     }
 
-    Write-Host "`nNote: To manage Outlook categories, use Outlook client or OWA." -ForegroundColor Gray
-    Write-Host "Categories > Manage Categories (right-click on any email)" -ForegroundColor Gray
+    # 4. Show categories defined in config settings
+    if ($configCategories.Count -gt 0) {
+        Write-Host "`n--- Config Settings Categories ---" -ForegroundColor Yellow
+        Write-Host "  Defined in: $script:ConfigPath" -ForegroundColor Gray
+        $configCategories | ForEach-Object {
+            Write-Host "  - $_" -ForegroundColor Green
+        }
+    }
+
+    # 5. Check for potential issues
+    Write-Host "`n--- Category Status ---" -ForegroundColor Yellow
+
+    # Categories in rules but not in settings
+    $undefinedInConfig = $configRuleCategories | Where-Object { $_ -notin $configCategories }
+    if ($undefinedInConfig.Count -gt 0) {
+        Write-Host "`n  Categories used in rules but not defined in settings:" -ForegroundColor Yellow
+        $undefinedInConfig | ForEach-Object {
+            Write-Host "    - $_ (consider adding to settings.categories)" -ForegroundColor Yellow
+        }
+    }
+
+    # Categories in config but not deployed
+    $notDeployed = $configRuleCategories | Where-Object { $_ -notin $deployedCategories }
+    if ($notDeployed.Count -gt 0 -and $deployedCategories.Count -gt 0) {
+        Write-Host "`n  Categories in config but not in deployed rules:" -ForegroundColor Gray
+        $notDeployed | ForEach-Object {
+            Write-Host "    - $_ (run Deploy to sync)" -ForegroundColor Gray
+        }
+    }
+
+    # Success message if everything is in sync
+    if ($configRuleCategories.Count -gt 0 -and $deployedCategories.Count -gt 0) {
+        $inSync = ($configRuleCategories | Where-Object { $_ -in $deployedCategories }).Count
+        $total = $configRuleCategories.Count
+        if ($inSync -eq $total) {
+            Write-Host "`n  All categories are in sync between config and deployed rules." -ForegroundColor Green
+        }
+    }
+
+    # 6. Guidance
+    Write-Host "`n--- How to Manage Categories ---" -ForegroundColor Yellow
+    Write-Host @"
+
+  Outlook categories must be created manually before rules can apply them.
+
+  To create categories in Outlook:
+  1. Open Outlook (desktop or web)
+  2. Right-click any email > Categorize > All Categories
+  3. Click 'New' to create categories matching your config
+
+  To add categories to rules:
+  1. Define in config: settings.categories.mycat = "My Category"
+  2. Reference in rule: actions.assignCategories = ["@settings.categories.mycat"]
+  3. Run: .\Manage-OutlookRules.ps1 -Operation Deploy
+
+  System categories (auto-detected by Outlook):
+  - Bills, Flight, Travel, Package, Shopping
+  - Use: actions.applySystemCategory = "Package"
+
+"@ -ForegroundColor Gray
+}
+
+# ---------------------------
+# AUDIT LOG OPERATIONS
+# ---------------------------
+
+function Invoke-AuditLogOperation {
+    <#
+    .SYNOPSIS
+        View and manage audit logs for Outlook Rules Manager operations.
+    #>
+    param(
+        [int]$Days = 7,
+        [string]$FilterOperation,
+        [switch]$ClearOld
+    )
+
+    Write-Host "`n=== Audit Log Viewer ===" -ForegroundColor Cyan
+
+    $logDir = Join-Path $script:ProjectRoot "logs"
+
+    # Check if audit logging is enabled
+    if (-not $script:SecurityModuleLoaded) {
+        Write-Host "`nWARNING: SecurityHelpers module not loaded." -ForegroundColor Yellow
+        Write-Host "Audit logging requires the SecurityHelpers module." -ForegroundColor Gray
+        Write-Host "The module should be in: scripts\SecurityHelpers.psm1" -ForegroundColor Gray
+        return
+    }
+
+    # Check if logs directory exists
+    if (-not (Test-Path $logDir)) {
+        Write-Host "`nNo audit logs found." -ForegroundColor Yellow
+        Write-Host "Audit logging is enabled with -EnableAuditLog flag." -ForegroundColor Gray
+        Write-Host "`nExample: .\Manage-OutlookRules.ps1 -Operation Deploy -EnableAuditLog" -ForegroundColor Gray
+        return
+    }
+
+    # Get log files
+    $logFiles = Get-ChildItem -Path $logDir -Filter "audit-*.json" -ErrorAction SilentlyContinue
+
+    if ($logFiles.Count -eq 0) {
+        Write-Host "`nNo audit log files found in: $logDir" -ForegroundColor Yellow
+        Write-Host "Run operations with -EnableAuditLog to create logs." -ForegroundColor Gray
+        return
+    }
+
+    # Show log file summary
+    Write-Host "`n--- Log Files ---" -ForegroundColor Yellow
+    Write-Host "Location: $logDir" -ForegroundColor Gray
+    Write-Host "Files found: $($logFiles.Count)" -ForegroundColor Gray
+
+    $totalSize = ($logFiles | Measure-Object -Property Length -Sum).Sum
+    $totalSizeKB = [math]::Round($totalSize / 1KB, 2)
+    Write-Host "Total size: $totalSizeKB KB" -ForegroundColor Gray
+
+    # Date range
+    $startDate = (Get-Date).AddDays(-$Days)
+    $endDate = Get-Date
+
+    Write-Host "`n--- Log Entries (Last $Days Days) ---" -ForegroundColor Yellow
+
+    # Retrieve logs
+    try {
+        $logs = Get-AuditLogs -StartDate $startDate -EndDate $endDate -Operation $FilterOperation -LogDirectory $logDir
+    } catch {
+        Write-Host "Error reading logs: $($_.Exception.Message)" -ForegroundColor Red
+        return
+    }
+
+    if ($logs.Count -eq 0) {
+        Write-Host "No log entries found for the specified period." -ForegroundColor Gray
+        return
+    }
+
+    # Statistics
+    $successCount = ($logs | Where-Object { $_.Result -eq "Success" }).Count
+    $failureCount = ($logs | Where-Object { $_.Result -eq "Failure" }).Count
+    $warningCount = ($logs | Where-Object { $_.Result -eq "Warning" }).Count
+
+    Write-Host "`nStatistics:" -ForegroundColor White
+    Write-Host "  Total entries: $($logs.Count)" -ForegroundColor Cyan
+    Write-Host "  Success: $successCount" -ForegroundColor Green
+    Write-Host "  Warnings: $warningCount" -ForegroundColor Yellow
+    Write-Host "  Failures: $failureCount" -ForegroundColor $(if ($failureCount -gt 0) { "Red" } else { "Gray" })
+
+    # Operation breakdown
+    $operationGroups = $logs | Group-Object Operation | Sort-Object Count -Descending
+    Write-Host "`nOperations breakdown:" -ForegroundColor White
+    foreach ($group in $operationGroups) {
+        Write-Host "  $($group.Name): $($group.Count)" -ForegroundColor Gray
+    }
+
+    # Recent entries
+    Write-Host "`n--- Recent Entries ---" -ForegroundColor Yellow
+    $recentLogs = $logs | Select-Object -Last 20
+
+    foreach ($entry in $recentLogs) {
+        $timestamp = $entry.Timestamp
+        $operation = $entry.Operation.PadRight(20)
+        $result = $entry.Result
+
+        $resultColor = switch ($result) {
+            "Success" { "Green" }
+            "Failure" { "Red" }
+            "Warning" { "Yellow" }
+            default { "Gray" }
+        }
+
+        $rulePart = if ($entry.RuleName) { " [$($entry.RuleName)]" } else { "" }
+        Write-Host "  $timestamp | $operation | " -NoNewline
+        Write-Host $result.PadRight(8) -ForegroundColor $resultColor -NoNewline
+        Write-Host $rulePart -ForegroundColor Cyan
+    }
+
+    if ($logs.Count -gt 20) {
+        Write-Host "`n  ... showing last 20 of $($logs.Count) entries" -ForegroundColor Gray
+    }
+
+    # Failures detail
+    $failures = $logs | Where-Object { $_.Result -eq "Failure" }
+    if ($failures.Count -gt 0) {
+        Write-Host "`n--- Failures Detail ---" -ForegroundColor Red
+        $failures | Select-Object -Last 5 | ForEach-Object {
+            Write-Host "`n  Timestamp: $($_.Timestamp)" -ForegroundColor Gray
+            Write-Host "  Operation: $($_.Operation)" -ForegroundColor Yellow
+            if ($_.RuleName) { Write-Host "  Rule: $($_.RuleName)" -ForegroundColor Cyan }
+            if ($_.Details) { Write-Host "  Details: $($_.Details)" -ForegroundColor Red }
+        }
+    }
+
+    # Clear old logs option
+    if ($ClearOld) {
+        $oldDate = (Get-Date).AddDays(-30)
+        $oldFiles = $logFiles | Where-Object {
+            if ($_.Name -match 'audit-(\d{4}-\d{2}-\d{2})\.json') {
+                $fileDate = [datetime]::ParseExact($matches[1], 'yyyy-MM-dd', $null)
+                return $fileDate -lt $oldDate
+            }
+            return $false
+        }
+
+        if ($oldFiles.Count -gt 0) {
+            Write-Host "`n--- Clearing Old Logs (>30 days) ---" -ForegroundColor Yellow
+            foreach ($file in $oldFiles) {
+                try {
+                    Remove-Item $file.FullName -Force
+                    Write-Host "  Removed: $($file.Name)" -ForegroundColor Gray
+                } catch {
+                    Write-Host "  Failed to remove: $($file.Name)" -ForegroundColor Red
+                }
+            }
+        } else {
+            Write-Host "`nNo log files older than 30 days to clear." -ForegroundColor Gray
+        }
+    }
+
+    # Usage hints
+    Write-Host "`n--- Usage ---" -ForegroundColor Yellow
+    Write-Host @"
+  Enable audit logging for operations:
+    .\Manage-OutlookRules.ps1 -Operation Deploy -EnableAuditLog
+
+  View logs (default: 7 days):
+    .\Manage-OutlookRules.ps1 -Operation AuditLog
+
+  Clear old logs (>30 days):
+    .\Manage-OutlookRules.ps1 -Operation AuditLog -Force
+
+"@ -ForegroundColor Gray
 }
 
 # ---------------------------
@@ -2011,4 +2292,5 @@ switch ($Operation) {
     # Utility operations
     "Validate"   { Invoke-ValidateOperation }
     "Categories" { Invoke-CategoriesOperation }
+    "AuditLog"   { Invoke-AuditLogOperation -ClearOld:$Force }
 }
