@@ -5,6 +5,7 @@
 # Environment configuration (contains tenant-specific IDs)
 .env
 .env.*
+*.env
 !.env.example
 
 # Generated config (contains tenant-specific IDs)
