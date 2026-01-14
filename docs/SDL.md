@@ -30,10 +30,11 @@ This application follows the **Shadow Org SDL Self-Attestation** process:
 
 | Control | Status | Notes |
 |---------|--------|-------|
-| OAuth 2.0 with PKCE | Implemented | Public client flow with MSAL |
+| OAuth 2.0 Device Code Flow | Implemented | SPACE-compliant, no localhost redirect URIs |
 | Delegated permissions only | Implemented | No application permissions |
 | Single-tenant app | Implemented | Registered in work tenant |
-| No secrets stored | Implemented | Interactive auth only |
+| No secrets stored | Implemented | Interactive auth only, no client secrets |
+| No localhost redirect URIs | Implemented | Uses device code flow for SPACE/ACE compliance |
 
 ### Data Protection
 
@@ -83,11 +84,12 @@ This application follows the **Shadow Org SDL Self-Attestation** process:
 - Unauthorized users with access to workstation
 
 ### Mitigations
-1. **Interactive authentication required** - No stored credentials
+1. **Device Code Flow authentication** - SPACE-compliant, no localhost redirect URIs
 2. **Delegated permissions only** - Cannot access other users' mailboxes
 3. **Single-tenant registration** - App only works in registered tenant
 4. **Public client flow** - No client secrets to leak
 5. **Gitignored sensitive files** - Credentials not committed to source control
+6. **No sensitive redirect URIs** - Uses device code flow (microsoft.com/devicelogin)
 
 ## SDL Compliance Checklist
 

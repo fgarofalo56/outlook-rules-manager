@@ -8,24 +8,36 @@
     - Connect to Microsoft Graph (for folder management)
     - Connect to Exchange Online (for inbox rules)
 
-    Supports interactive auth and device code flow (for restricted environments).
+    DEFAULTS TO DEVICE CODE FLOW for SPACE/ACE compliance (localhost redirect URIs not allowed).
 
 .PARAMETER UseDeviceCode
-    Use device code flow instead of interactive browser popup.
-    Useful in environments where browser popups are blocked.
+    Use device code flow (DEFAULT). Displays a code to enter at microsoft.com/devicelogin.
+    This is the default because localhost redirect URIs are not allowed by SPACE compliance.
+
+.PARAMETER Interactive
+    Use interactive browser popup instead of device code.
+    Only use if you've added this redirect URI to your app registration:
+    https://login.microsoftonline.com/common/oauth2/nativeclient
 
 .EXAMPLE
     .\Connect-OutlookRulesApp.ps1
-    # Interactive browser login
+    # Device code flow (default) - displays code to enter at microsoft.com/devicelogin
 
 .EXAMPLE
-    .\Connect-OutlookRulesApp.ps1 -UseDeviceCode
-    # Device code flow (displays code to enter at microsoft.com/devicelogin)
+    .\Connect-OutlookRulesApp.ps1 -Interactive
+    # Interactive browser login (requires native client redirect URI configured)
 #>
 
 param(
-    [switch]$UseDeviceCode
+    [switch]$UseDeviceCode,
+    [switch]$Interactive  # Use interactive browser flow (requires native client redirect URI)
 )
+
+# Default to Device Code flow since localhost redirect URIs are not allowed by SPACE compliance
+# Use -Interactive flag only if you've configured https://login.microsoftonline.com/common/oauth2/nativeclient
+if (-not $Interactive) {
+    $UseDeviceCode = $true
+}
 
 # ---------------------------
 # CONFIGURATION
