@@ -44,19 +44,25 @@ id = "email-address"
 description = "Email address (potential PII)"
 regex = '''[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|org|net|edu|gov|mil|io|co|us|uk|ca|au|de|fr|microsoft\.com)'''
 tags = ["pii", "email"]
-# Allow example emails
+# Allow example emails (RFC 2606 reserved domains and common placeholders)
 [rules.allowlist]
 regexes = [
-    '''example\.com''',
-    '''company\.com''',
-    '''domain\.com''',
-    '''contoso\.com''',
-    '''fabrikam\.com''',
-    '''example@''',
+    '''@example\.(com|org|net)''',
+    '''@domain\.(com|org|net)''',
+    '''@company\.com''',
+    '''@contoso\.com''',
+    '''@fabrikam\.com''',
+    '''@test\.(com|org|net)''',
+    '''@localhost''',
     '''user@''',
     '''test@''',
+    '''admin@''',
+    '''backup@''',
+    '''spam@''',
+    '''noreply@''',
     '''placeholder''',
-    '''YOUR_'''
+    '''YOUR_''',
+    '''<.*@.*>''',
 ]
 
 [[rules]]
@@ -93,14 +99,31 @@ paths = [
     '''\.gitleaks\.toml$''',
     '''\.md$''',  # Documentation files
     '''\.github/.*\.yml$''',  # GitHub workflows (contain example patterns)
+    '''examples/.*''',  # Example files directory
 ]
 regexes = [
+    # RFC 2606 reserved example domains
+    '''@example\.(com|org|net)''',
+    '''@domain\.(com|org|net)''',
     '''example\.com''',
-    '''company\.com''',
+    '''domain\.com''',
+    # Microsoft documentation placeholders
+    '''@contoso\.com''',
+    '''@fabrikam\.com''',
     '''contoso\.com''',
     '''fabrikam\.com''',
+    # Common example patterns in help text
+    '''user@example''',
+    '''backup@example''',
+    '''spam@example''',
+    '''test@example''',
+    '''admin@example''',
+    '''list@example''',
+    # Placeholder patterns
     '''YOUR_.*''',
     '''\[INSERT.*\]''',
     '''<your-.*>''',
-    '''00000000-0000-0000-0000-000000000000''',  # Placeholder GUID
+    '''<.*@.*>''',
+    # Placeholder GUID
+    '''00000000-0000-0000-0000-000000000000''',
 ]
