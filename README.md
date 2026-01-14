@@ -49,7 +49,7 @@
 ### Step 1: Install Required Modules
 
 ```powershell
-.\prereqs.ps1
+.\Install-Prerequisites.ps1
 ```
 
 ### Step 2: Register Azure AD Application (One-Time)
@@ -273,20 +273,32 @@ All rules are defined in `rules-config.json` - version controllable and reviewab
 
 ---
 
+## 📂 Repository Structure
+
+```
+outlook-rules-manager/
+├── .github/workflows/      # CI/CD and security scanning
+├── docs/                   # Documentation
+├── examples/               # Example configuration files
+├── scripts/                # Utility scripts
+├── *.ps1                   # Main PowerShell scripts
+└── README.md
+```
+
 ## 📂 File Reference
 
 | File | Description |
 |:-----|:------------|
-| 📜 `prereqs.ps1` | Installs required PowerShell modules |
+| 📜 `Install-Prerequisites.ps1` | Installs required PowerShell modules |
 | 📜 `Register-OutlookRulesApp.ps1` | Creates Azure AD app registration |
 | 📜 `Connect-OutlookRulesApp.ps1` | Authenticates to Graph and Exchange Online |
 | 📜 `Setup-OutlookRules.ps1` | Creates folders and inbox rules (one-shot setup) |
 | 📜 `Manage-OutlookRules.ps1` | Full rules management CLI |
-| 📄 `rules-config.json` | Declarative rule definitions |
+| 📄 `rules-config.json` | Declarative rule definitions (gitignored) |
 | 🔒 `.env` | Azure AD credentials (gitignored) |
-| 🔒 `app-config.json` | Backup config (gitignored) |
-| 📖 `docs/SDL.md` | SDL compliance documentation |
-| 📖 `docs/SECURITY-QUESTIONNAIRE.md` | Security questionnaire |
+| 📁 `examples/` | Example config files (`.env.example`, `rules-config.example.json`) |
+| 📁 `docs/` | SDL compliance and security documentation |
+| 📁 `scripts/` | Utility scripts (`Check-BeforeCommit.ps1`) |
 
 ---
 

@@ -6,14 +6,14 @@
 .env
 .env.*
 *.env
-!.env.example
+!examples/.env.example
 
 # Generated config (contains tenant-specific IDs)
 app-config.json
 
 # Rules config (contains personal email addresses)
 rules-config.json
-!rules-config.example.json
+!examples/rules-config.example.json
 
 # Exported rules (may contain email addresses)
 exported-rules.json

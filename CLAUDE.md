@@ -7,18 +7,32 @@ PowerShell-based automation for managing Outlook inbox organization via Microsof
 ## Architecture
 
 ```
-outlook/
-├── prereqs.ps1                    # Module installation script
+outlook-rules-manager/
+├── .github/
+│   └── workflows/                 # CI/CD and security scanning
+│       ├── msdo-scan.yml
+│       └── security-scan.yml
+├── docs/                          # Documentation
+│   ├── rules-cheatsheet.md
+│   ├── SDL.md
+│   └── SECURITY-QUESTIONNAIRE.md
+├── examples/                      # Example configuration files
+│   ├── .env.example
+│   └── rules-config.example.json
+├── scripts/                       # Utility scripts
+│   └── Check-BeforeCommit.ps1
+├── Install-Prerequisites.ps1      # Module installation script
 ├── Register-OutlookRulesApp.ps1   # Azure AD app registration (run once)
 ├── Connect-OutlookRulesApp.ps1    # Authentication helper
 ├── Setup-OutlookRules.ps1         # One-shot rules/folders creation
-├── Manage-OutlookRules.ps1        # Full management CLI (list/export/deploy/etc)
-├── rules-config.json              # Declarative rule definitions
+├── Manage-OutlookRules.ps1        # Full management CLI
+├── rules-config.json              # Declarative rule definitions (gitignored)
 ├── .env                           # Azure AD credentials (gitignored)
-├── app-config.json                # Backup config JSON (gitignored)
-├── .gitignore                     # Protects .env and generated files
-└── docs/
-    └── rules-cheatsheet.md        # Quick reference for rule logic
+├── .gitignore                     # Protects sensitive files
+├── .gitleaks.toml                 # Secret scanning configuration
+├── .pre-commit-config.yaml        # Pre-commit hook configuration
+├── LICENSE                        # MIT License
+└── README.md                      # Project documentation
 ```
 
 ## Key Files
@@ -44,8 +58,10 @@ outlook/
 |------|---------|-------------|
 | `.env` | Azure AD ClientId/TenantId (primary) | Yes |
 | `app-config.json` | Azure AD config backup (JSON format) | Yes |
-| `rules-config.json` | Rule definitions, sender lists, keywords | No |
+| `rules-config.json` | Rule definitions, sender lists, keywords | Yes |
 | `exported-rules.json` | Backup of deployed rules | Yes |
+| `examples/.env.example` | Example .env template | No |
+| `examples/rules-config.example.json` | Example rules config template | No |
 
 ## Common Tasks
 
@@ -170,7 +186,7 @@ Get-ConnectionInformation
 
 ### Initial Setup
 ```powershell
-.\prereqs.ps1                           # Install modules
+.\Install-Prerequisites.ps1             # Install modules
 .\Register-OutlookRulesApp.ps1          # Create Azure AD app
 .\Connect-OutlookRulesApp.ps1           # Authenticate
 .\Manage-OutlookRules.ps1 -Operation Deploy  # Deploy rules
