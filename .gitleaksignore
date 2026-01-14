@@ -1,0 +1,13 @@
+# Gitleaks Ignore File - Known False Positives
+# These are example email addresses used in documentation and help text
+# All use RFC 2606 reserved domains (example.com, example.org, example.net)
+
+# Manage-OutlookRules.ps1 - Help text examples
+ad6f6f7bd2825d14fa6ac8f02bd1f92ee5343d61:Manage-OutlookRules.ps1:email-address:118
+ad6f6f7bd2825d14fa6ac8f02bd1f92ee5343d61:Manage-OutlookRules.ps1:email-address:1649
+ad6f6f7bd2825d14fa6ac8f02bd1f92ee5343d61:Manage-OutlookRules.ps1:email-address:1765
+ad6f6f7bd2825d14fa6ac8f02bd1f92ee5343d61:Manage-OutlookRules.ps1:email-address:1766
+ad6f6f7bd2825d14fa6ac8f02bd1f92ee5343d61:Manage-OutlookRules.ps1:email-address:1767
+
+# Security fix commit - added validation message with example format
+76553014eb3dcc3b2c222d14c961b4392468c8f3:Manage-OutlookRules.ps1:email-address:1729
