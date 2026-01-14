@@ -124,12 +124,10 @@ if (-not $app -or -not $app.AppId) {
 Write-Host "Created app registration: $($app.DisplayName)" -ForegroundColor Green
 Write-Host "  Application (client) ID: $($app.AppId)" -ForegroundColor Cyan
 
-# Add public client redirect URIs
+# Add public client redirect URIs (SPACE-compliant - no localhost)
 Write-Host "  Adding redirect URIs..." -ForegroundColor Gray
 $redirectUris = @(
-    "http://localhost",
-    "https://login.microsoftonline.com/common/oauth2/nativeclient",
-    "urn:ietf:wg:oauth:2.0:oob"
+    "https://login.microsoftonline.com/common/oauth2/nativeclient"
 )
 
 try {
