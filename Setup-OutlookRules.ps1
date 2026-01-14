@@ -17,16 +17,14 @@ $Category_Action = "Action Required"
 $Category_Metrics = "Metrics"
 
 # Priority senders (high signal sources)
+# NOTE: Replace these example addresses with your actual priority senders
+# For production use, configure senders in rules-config.json (gitignored)
 $PrioritySenders = @(
-    "blakeba@microsoft.com",            # Manager: Blake Badolato
-    "Dan.Coleman@microsoft.com",        # Skip: Dan Coleman
-    "pkemp@microsoft.com",              # PJ Kemp
-    "Stephanie.Joshi@microsoft.com",    # Stephanie Joshi
-    "Chris.Peacock@microsoft.com",      # Chris Peacock
-    "Anthony.Puca@microsoft.com",       # Anthony Puca
-    "valariew@microsoft.com",           # Valarie Warburton
-    "pnash@microsoft.com",              # Pete Nash
-    "stephen.cyphers.ctr@dot.gov"       # Stephen Cyphers (CTR, DOT)
+    "manager@example.com",              # Your manager
+    "skip.level@example.com",           # Skip-level manager
+    "colleague1@example.com",           # Key colleague
+    "colleague2@example.com",           # Key colleague
+    "external.contact@contoso.com"      # External contact
 )
 
 # Keywords per rule

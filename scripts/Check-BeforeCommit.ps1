@@ -24,16 +24,16 @@ param()
 $ErrorActionPreference = "Continue"
 $script:IssuesFound = 0
 
-# Colors for output
-function Write-Success { param($Message) Write-Host "✅ $Message" -ForegroundColor Green }
-function Write-Warn { param($Message) Write-Host "⚠️ $Message" -ForegroundColor Yellow }
-function Write-Fail { param($Message) Write-Host "❌ $Message" -ForegroundColor Red; $script:IssuesFound++ }
-function Write-Info { param($Message) Write-Host "🔍 $Message" -ForegroundColor Cyan }
+# Colors for output (ASCII-safe for Windows PowerShell compatibility)
+function Write-Success { param($Message) Write-Host "[PASS] $Message" -ForegroundColor Green }
+function Write-Warn { param($Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
+function Write-Fail { param($Message) Write-Host "[FAIL] $Message" -ForegroundColor Red; $script:IssuesFound++ }
+function Write-Info { param($Message) Write-Host "[INFO] $Message" -ForegroundColor Cyan }
 
 Write-Host ""
-Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "  🔒 PRE-COMMIT SECURITY CHECK - Outlook Rules Manager" -ForegroundColor Cyan
-Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "  PRE-COMMIT SECURITY CHECK - Outlook Rules Manager" -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
 # ============================================
@@ -95,7 +95,13 @@ $allowedDomains = @(
 )
 
 $emailIssues = 0
-$filesToCheck = Get-ChildItem -Path . -Include *.ps1,*.json -Recurse | Where-Object { $_.Name -notmatch "example" }
+
+# Get list of tracked files (ignore gitignored files like rules-config.json)
+$trackedFiles = git ls-files --cached 2>$null
+$filesToCheck = Get-ChildItem -Path . -Include *.ps1,*.json -Recurse | Where-Object {
+    $_.Name -notmatch "example" -and
+    ($trackedFiles -contains ($_.FullName -replace [regex]::Escape((Get-Location).Path + '\'), '' -replace '\\', '/'))
+}
 
 foreach ($file in $filesToCheck) {
     $content = Get-Content $file.FullName -Raw -ErrorAction SilentlyContinue
@@ -122,6 +128,16 @@ Write-Info "Checking for Azure GUIDs..."
 
 $guidPattern = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
 $placeholderGuid = '00000000-0000-0000-0000-000000000000'
+
+# Microsoft Graph API standard permission GUIDs (public constants, not secrets)
+# See: https://learn.microsoft.com/en-us/graph/permissions-reference
+$allowedGuids = @(
+    '00000003-0000-0000-c000-000000000000',  # Microsoft Graph Application ID
+    'e383f46e-2787-4529-855e-0e479a3ffac0',  # Mail.ReadWrite
+    '570282fd-fa5c-430d-a7fd-fc8dc98a9dca',  # Mail.Read
+    'e1fe6dd8-ba31-4d61-89e7-88639da4683d'   # User.Read
+)
+
 $guidIssues = 0
 
 foreach ($file in $filesToCheck) {
@@ -130,15 +146,18 @@ foreach ($file in $filesToCheck) {
 
     $matches = [regex]::Matches($content, $guidPattern)
     foreach ($match in $matches) {
-        if ($match.Value -ne $placeholderGuid) {
-            # Check if it's in a variable assignment (likely intentional)
-            $line = ($content.Substring(0, $match.Index) -split "`n")[-1]
-            if ($line -match '\$\w+\s*=' -or $line -match 'ClientId|TenantId') {
-                Write-Warn "GUID in $($file.Name): $($match.Value.Substring(0,8))... (may be config)"
-            } else {
-                Write-Fail "GUID FOUND in $($file.Name): $($match.Value.Substring(0,8))..."
-                $guidIssues++
-            }
+        # Skip placeholder and allowed Microsoft GUIDs
+        if ($match.Value -eq $placeholderGuid -or $allowedGuids -contains $match.Value) {
+            continue
+        }
+
+        # Check if it's in a variable assignment (likely intentional config)
+        $line = ($content.Substring(0, $match.Index) -split "`n")[-1]
+        if ($line -match '\$\w+\s*=' -or $line -match 'ClientId|TenantId') {
+            Write-Warn "GUID in $($file.Name): $($match.Value.Substring(0,8))... (may be config)"
+        } else {
+            Write-Fail "GUID FOUND in $($file.Name): $($match.Value.Substring(0,8))..."
+            $guidIssues++
         }
     }
 }
@@ -215,16 +234,16 @@ if ($stagedDiff) {
 # SUMMARY
 # ============================================
 Write-Host ""
-Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
 
 if ($script:IssuesFound -gt 0) {
     Write-Host ""
     Write-Fail "FOUND $script:IssuesFound ISSUE(S) - Please fix before committing!"
     Write-Host ""
     Write-Host "Tips:" -ForegroundColor Yellow
-    Write-Host "  • Use .env files for credentials (gitignored)" -ForegroundColor Gray
-    Write-Host "  • Use example.com for sample emails" -ForegroundColor Gray
-    Write-Host "  • Use 00000000-0000-0000-0000-000000000000 for placeholder GUIDs" -ForegroundColor Gray
+    Write-Host "  - Use .env files for credentials (gitignored)" -ForegroundColor Gray
+    Write-Host "  - Use example.com for sample emails" -ForegroundColor Gray
+    Write-Host "  - Use 00000000-0000-0000-0000-000000000000 for placeholder GUIDs" -ForegroundColor Gray
     Write-Host ""
     exit 1
 } else {
