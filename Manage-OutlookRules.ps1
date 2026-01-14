@@ -223,7 +223,13 @@ function Write-OperationLog {
     if ($script:EnableAuditLog -and $script:SecurityModuleLoaded) {
         try {
             $logDir = Join-Path $PSScriptRoot "logs"
-            Write-AuditLog -Operation $Operation -RuleName $RuleName -Result $Result -Details $Details -LogDirectory $logDir | Out-Null
+            # SECURITY: Redact sensitive data (email addresses, GUIDs) from logs
+            $safeDetails = if ($Details -and (Get-Command 'Protect-SensitiveLogData' -ErrorAction SilentlyContinue)) {
+                Protect-SensitiveLogData -Data $Details
+            } else {
+                $Details
+            }
+            Write-AuditLog -Operation $Operation -RuleName $RuleName -Result $Result -Details $safeDetails -LogDirectory $logDir | Out-Null
             Write-Verbose "Audit log: $Operation - $Result"
         } catch {
             Write-Verbose "Failed to write audit log: $($_.Exception.Message)"
@@ -387,7 +393,16 @@ function Convert-ConfigRuleToParams {
         $params["FromAddressContainsWords"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.fromAddressContainsWords
     }
     if ($Rule.conditions.senderDomainIs) {
-        $params["SenderDomainIs"] = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.senderDomainIs
+        $domains = Resolve-ConfigReferences -Config $Config -Value $Rule.conditions.senderDomainIs
+        # SECURITY: Validate domain format
+        if ($script:SecurityModuleLoaded) {
+            foreach ($domain in $domains) {
+                if (-not (Test-ValidDomain -Domain $domain)) {
+                    Write-Verbose "WARNING: Domain format may be invalid: $domain"
+                }
+            }
+        }
+        $params["SenderDomainIs"] = $domains
     }
 
     # Recipient conditions
@@ -524,17 +539,45 @@ function Convert-ConfigRuleToParams {
     }
 
     # Forward/Redirect actions (use with caution - security implications)
+    # SECURITY: Validate all email addresses in forwarding actions
     if ($Rule.actions.forwardTo) {
         Write-Verbose "SECURITY: Rule '$($Rule.name)' contains forwardTo action"
-        $params["ForwardTo"] = Resolve-ConfigReferences -Config $Config -Value $Rule.actions.forwardTo
+        $forwardAddresses = Resolve-ConfigReferences -Config $Config -Value $Rule.actions.forwardTo
+        if ($script:SecurityModuleLoaded) {
+            foreach ($addr in $forwardAddresses) {
+                if (-not (Test-ValidEmail -Email $addr)) {
+                    Write-Host "SECURITY ERROR: Invalid email in forwardTo action: $addr" -ForegroundColor Red
+                    throw "Invalid email address in forwardTo action: $addr"
+                }
+            }
+        }
+        $params["ForwardTo"] = $forwardAddresses
     }
     if ($Rule.actions.redirectTo) {
         Write-Verbose "SECURITY: Rule '$($Rule.name)' contains redirectTo action"
-        $params["RedirectTo"] = Resolve-ConfigReferences -Config $Config -Value $Rule.actions.redirectTo
+        $redirectAddresses = Resolve-ConfigReferences -Config $Config -Value $Rule.actions.redirectTo
+        if ($script:SecurityModuleLoaded) {
+            foreach ($addr in $redirectAddresses) {
+                if (-not (Test-ValidEmail -Email $addr)) {
+                    Write-Host "SECURITY ERROR: Invalid email in redirectTo action: $addr" -ForegroundColor Red
+                    throw "Invalid email address in redirectTo action: $addr"
+                }
+            }
+        }
+        $params["RedirectTo"] = $redirectAddresses
     }
     if ($Rule.actions.forwardAsAttachmentTo) {
         Write-Verbose "SECURITY: Rule '$($Rule.name)' contains forwardAsAttachmentTo action"
-        $params["ForwardAsAttachmentTo"] = Resolve-ConfigReferences -Config $Config -Value $Rule.actions.forwardAsAttachmentTo
+        $attachmentAddresses = Resolve-ConfigReferences -Config $Config -Value $Rule.actions.forwardAsAttachmentTo
+        if ($script:SecurityModuleLoaded) {
+            foreach ($addr in $attachmentAddresses) {
+                if (-not (Test-ValidEmail -Email $addr)) {
+                    Write-Host "SECURITY ERROR: Invalid email in forwardAsAttachmentTo action: $addr" -ForegroundColor Red
+                    throw "Invalid email address in forwardAsAttachmentTo action: $addr"
+                }
+            }
+        }
+        $params["ForwardAsAttachmentTo"] = $attachmentAddresses
     }
 
     # Processing control
@@ -1578,11 +1621,25 @@ function Invoke-OutOfOfficeOperation {
         }
 
         if ($InternalMessage) {
-            $setParams["InternalMessage"] = $InternalMessage
+            # SECURITY: Sanitize HTML to prevent script injection
+            if ($script:SecurityModuleLoaded -and (Get-Command 'ConvertTo-SafeText' -ErrorAction SilentlyContinue)) {
+                $safeInternal = ConvertTo-SafeText -Text $InternalMessage -AllowBasicFormatting
+                Write-Verbose "Sanitized internal message for security"
+            } else {
+                $safeInternal = $InternalMessage
+            }
+            $setParams["InternalMessage"] = $safeInternal
         }
 
         if ($ExternalMessage) {
-            $setParams["ExternalMessage"] = $ExternalMessage
+            # SECURITY: Sanitize HTML to prevent script injection
+            if ($script:SecurityModuleLoaded -and (Get-Command 'ConvertTo-SafeText' -ErrorAction SilentlyContinue)) {
+                $safeExternal = ConvertTo-SafeText -Text $ExternalMessage -AllowBasicFormatting
+                Write-Verbose "Sanitized external message for security"
+            } else {
+                $safeExternal = $ExternalMessage
+            }
+            $setParams["ExternalMessage"] = $safeExternal
             $setParams["ExternalAudience"] = "All"  # Send to all external senders
         }
 
@@ -1665,6 +1722,15 @@ function Invoke-ForwardingOperation {
             $setParams["ForwardingAddress"] = $null
             Write-Host "Disabling forwarding..." -ForegroundColor Yellow
         } elseif ($Address) {
+            # SECURITY: Validate email address format before setting
+            if ($script:SecurityModuleLoaded -and (Get-Command 'Test-ValidEmail' -ErrorAction SilentlyContinue)) {
+                if (-not (Test-ValidEmail -Email $Address)) {
+                    Write-Host "SECURITY ERROR: Invalid email address format: $Address" -ForegroundColor Red
+                    Write-Host "Email must be in format: user@domain.com" -ForegroundColor Yellow
+                    Write-OperationLog -Operation "Forwarding-Set" -RuleName $null -Result "Failure" -Details "Invalid email format: validation blocked"
+                    return
+                }
+            }
             $setParams["ForwardingSmtpAddress"] = "smtp:$Address"
             Write-Host "Setting forwarding to: $Address" -ForegroundColor Yellow
         }
@@ -1779,21 +1845,60 @@ function Invoke-JunkMailOperation {
             $setParams = @{}
 
             if ($AddSafeSenders) {
-                $newSafe = @($current.TrustedSendersAndDomains) + $AddSafeSenders | Select-Object -Unique
-                $setParams["TrustedSendersAndDomains"] = $newSafe
-                Write-Host "Adding to safe senders: $($AddSafeSenders -join ', ')" -ForegroundColor Green
+                # SECURITY: Validate email/domain format
+                if ($script:SecurityModuleLoaded) {
+                    foreach ($entry in $AddSafeSenders) {
+                        $isValidEmail = Test-ValidEmail -Email $entry
+                        $isValidDomain = Test-ValidDomain -Domain $entry
+                        if (-not $isValidEmail -and -not $isValidDomain) {
+                            Write-Host "WARNING: Invalid format skipped: $entry" -ForegroundColor Yellow
+                            $AddSafeSenders = $AddSafeSenders | Where-Object { $_ -ne $entry }
+                        }
+                    }
+                }
+                if ($AddSafeSenders.Count -gt 0) {
+                    $newSafe = @($current.TrustedSendersAndDomains) + $AddSafeSenders | Select-Object -Unique
+                    $setParams["TrustedSendersAndDomains"] = $newSafe
+                    Write-Host "Adding to safe senders: $($AddSafeSenders -join ', ')" -ForegroundColor Green
+                }
             }
 
             if ($AddBlockedSenders) {
-                $newBlocked = @($current.BlockedSendersAndDomains) + $AddBlockedSenders | Select-Object -Unique
-                $setParams["BlockedSendersAndDomains"] = $newBlocked
-                Write-Host "Adding to blocked senders: $($AddBlockedSenders -join ', ')" -ForegroundColor Red
+                # SECURITY: Validate email/domain format
+                if ($script:SecurityModuleLoaded) {
+                    foreach ($entry in $AddBlockedSenders) {
+                        $isValidEmail = Test-ValidEmail -Email $entry
+                        $isValidDomain = Test-ValidDomain -Domain $entry
+                        if (-not $isValidEmail -and -not $isValidDomain) {
+                            Write-Host "WARNING: Invalid format skipped: $entry" -ForegroundColor Yellow
+                            $AddBlockedSenders = $AddBlockedSenders | Where-Object { $_ -ne $entry }
+                        }
+                    }
+                }
+                if ($AddBlockedSenders.Count -gt 0) {
+                    $newBlocked = @($current.BlockedSendersAndDomains) + $AddBlockedSenders | Select-Object -Unique
+                    $setParams["BlockedSendersAndDomains"] = $newBlocked
+                    Write-Host "Adding to blocked senders: $($AddBlockedSenders -join ', ')" -ForegroundColor Red
+                }
             }
 
             if ($AddSafeRecipients) {
-                $newRecipients = @($current.TrustedRecipientsAndDomains) + $AddSafeRecipients | Select-Object -Unique
-                $setParams["TrustedRecipientsAndDomains"] = $newRecipients
-                Write-Host "Adding to safe recipients: $($AddSafeRecipients -join ', ')" -ForegroundColor Green
+                # SECURITY: Validate email/domain format
+                if ($script:SecurityModuleLoaded) {
+                    foreach ($entry in $AddSafeRecipients) {
+                        $isValidEmail = Test-ValidEmail -Email $entry
+                        $isValidDomain = Test-ValidDomain -Domain $entry
+                        if (-not $isValidEmail -and -not $isValidDomain) {
+                            Write-Host "WARNING: Invalid format skipped: $entry" -ForegroundColor Yellow
+                            $AddSafeRecipients = $AddSafeRecipients | Where-Object { $_ -ne $entry }
+                        }
+                    }
+                }
+                if ($AddSafeRecipients.Count -gt 0) {
+                    $newRecipients = @($current.TrustedRecipientsAndDomains) + $AddSafeRecipients | Select-Object -Unique
+                    $setParams["TrustedRecipientsAndDomains"] = $newRecipients
+                    Write-Host "Adding to safe recipients: $($AddSafeRecipients -join ', ')" -ForegroundColor Green
+                }
             }
 
             if (-not $ForceFlag -and $setParams.Count -gt 0) {
