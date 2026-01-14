@@ -42,6 +42,13 @@
 .PARAMETER Force
     Skip confirmation prompts for destructive operations
 
+.PARAMETER EnableAuditLog
+    Enable audit logging to ./logs/ directory (requires SecurityHelpers module)
+
+.NOTES
+    Use -Verbose for detailed diagnostic output when troubleshooting.
+    Example: .\Manage-OutlookRules.ps1 -Operation Deploy -Verbose
+
 .EXAMPLE
     .\Manage-OutlookRules.ps1 -Operation List
     # Lists all current inbox rules
@@ -73,6 +80,14 @@
 .EXAMPLE
     .\Manage-OutlookRules.ps1 -Operation DeleteAll -Force
     # Deletes ALL inbox rules (use with caution!)
+
+.EXAMPLE
+    .\Manage-OutlookRules.ps1 -Operation Deploy -Verbose
+    # Deploy with verbose output for troubleshooting
+
+.EXAMPLE
+    .\Manage-OutlookRules.ps1 -Operation Deploy -EnableAuditLog
+    # Deploy with audit logging enabled
 #>
 
 [CmdletBinding()]
@@ -94,33 +109,81 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$ExportPath = (Join-Path $PSScriptRoot "exported-rules.json"),
 
-    [switch]$Force
+    [switch]$Force,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$EnableAuditLog
 )
+
+# ---------------------------
+# SECURITY MODULE
+# ---------------------------
+
+# Import security helpers module
+$securityModule = Join-Path $PSScriptRoot "scripts\SecurityHelpers.psm1"
+if (Test-Path $securityModule) {
+    Import-Module $securityModule -Force -ErrorAction SilentlyContinue
+    $script:SecurityModuleLoaded = $true
+} else {
+    $script:SecurityModuleLoaded = $false
+    Write-Verbose "Security module not found at $securityModule - some validations will be skipped"
+}
+
+# ---------------------------
+# AUDIT LOGGING
+# ---------------------------
+
+function Write-OperationLog {
+    param(
+        [string]$Operation,
+        [string]$RuleName,
+        [ValidateSet('Success', 'Failure', 'Warning')]
+        [string]$Result,
+        [string]$Details
+    )
+
+    if ($script:EnableAuditLog -and $script:SecurityModuleLoaded) {
+        try {
+            $logDir = Join-Path $PSScriptRoot "logs"
+            Write-AuditLog -Operation $Operation -RuleName $RuleName -Result $Result -Details $Details -LogDirectory $logDir | Out-Null
+            Write-Verbose "Audit log: $Operation - $Result"
+        } catch {
+            Write-Verbose "Failed to write audit log: $($_.Exception.Message)"
+        }
+    }
+}
 
 # ---------------------------
 # HELPER FUNCTIONS
 # ---------------------------
 
 function Test-ExchangeConnection {
+    Write-Verbose "Checking Exchange Online connection..."
     $conn = Get-ConnectionInformation -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*ExchangeOnline*" }
     if (-not $conn) {
         Write-Host "ERROR: Not connected to Exchange Online." -ForegroundColor Red
         Write-Host "Run: .\Connect-OutlookRulesApp.ps1" -ForegroundColor Yellow
         exit 1
     }
+    Write-Verbose "Exchange Online connected: $($conn.UserPrincipalName)"
 }
 
 function Test-GraphConnection {
+    Write-Verbose "Checking Microsoft Graph connection..."
     $ctx = Get-MgContext -ErrorAction SilentlyContinue
     if (-not $ctx) {
         Write-Host "ERROR: Not connected to Microsoft Graph." -ForegroundColor Red
         Write-Host "Run: .\Connect-OutlookRulesApp.ps1" -ForegroundColor Yellow
         exit 1
     }
+    Write-Verbose "Microsoft Graph connected: $($ctx.Account) with scopes: $($ctx.Scopes -join ', ')"
 }
 
 function Get-RulesList {
-    Get-InboxRule -ErrorAction Stop | Sort-Object Priority
+    Write-Verbose "Retrieving inbox rules from Exchange Online..."
+    $rules = Get-InboxRule -ErrorAction Stop | Sort-Object Priority
+    Write-Verbose "Retrieved $($rules.Count) rules"
+    return $rules
 }
 
 function Format-RuleForDisplay {
@@ -152,7 +215,21 @@ function Format-RuleForDisplay {
 }
 
 function Read-Config {
-    param([string]$Path)
+    param(
+        [string]$Path,
+        [switch]$SkipValidation
+    )
+
+    # Security: Validate path is within allowed directory
+    if ($script:SecurityModuleLoaded) {
+        try {
+            $Path = Resolve-SafePath -Path $Path -BaseDirectory $PSScriptRoot
+            Write-Verbose "Validated config path: $Path"
+        } catch {
+            Write-Host "SECURITY ERROR: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+        }
+    }
 
     if (-not (Test-Path $Path)) {
         Write-Host "ERROR: Config file not found: $Path" -ForegroundColor Red
@@ -160,6 +237,34 @@ function Read-Config {
     }
 
     $config = Get-Content $Path -Raw | ConvertFrom-Json
+
+    # Validate configuration if security module is loaded
+    if ($script:SecurityModuleLoaded -and -not $SkipValidation) {
+        Write-Verbose "Validating configuration schema..."
+
+        # Schema validation
+        $schemaResult = Test-ConfigSchema -Config $config
+        if (-not $schemaResult.Valid) {
+            Write-Host "`nConfiguration Errors:" -ForegroundColor Red
+            $schemaResult.Errors | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+            exit 1
+        }
+        if ($schemaResult.Warnings.Count -gt 0) {
+            Write-Host "`nConfiguration Warnings:" -ForegroundColor Yellow
+            $schemaResult.Warnings | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
+        }
+
+        # Email validation
+        $emailResult = Test-ConfigEmails -Config $config
+        if (-not $emailResult.Valid) {
+            Write-Host "`nEmail Validation Errors:" -ForegroundColor Red
+            $emailResult.Errors | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+            exit 1
+        }
+
+        Write-Verbose "Configuration validation passed"
+    }
+
     return $config
 }
 
@@ -363,6 +468,7 @@ function Invoke-ExportOperation {
     Test-ExchangeConnection
 
     Write-Host "`n=== Exporting Rules ===" -ForegroundColor Cyan
+    Write-Verbose "Export destination: $Path"
 
     $rules = Get-RulesList
 
@@ -400,9 +506,12 @@ function Invoke-CompareOperation {
     Test-ExchangeConnection
 
     Write-Host "`n=== Comparing Deployed vs Config ===" -ForegroundColor Cyan
+    Write-Verbose "Config path: $Path"
 
     $config = Read-Config -Path $Path
+    Write-Verbose "Config loaded: $($config.rules.Count) rules defined"
     $deployedRules = Get-RulesList
+    Write-Verbose "Deployed rules retrieved: $($deployedRules.Count) rules"
 
     $configRuleNames = $config.rules | ForEach-Object { $_.name }
     $deployedRuleNames = $deployedRules | ForEach-Object { $_.Name }
@@ -462,7 +571,10 @@ function Invoke-DeployOperation {
 
     # Create folders first
     Write-Host "`n--- Creating Folders ---" -ForegroundColor Yellow
+    Write-Verbose "Fetching Inbox folder ID..."
     $inbox = Get-MgUserMailFolder -UserId me -MailFolderId Inbox
+    Write-Verbose "Inbox ID: $($inbox.Id)"
+    Write-Verbose "Processing $($config.folders.Count) folders from config..."
 
     foreach ($folder in $config.folders) {
         $existing = Get-MgUserMailFolderChildFolder -UserId me -MailFolderId $inbox.Id -All |
@@ -479,9 +591,13 @@ function Invoke-DeployOperation {
     # Create/update rules
     Write-Host "`n--- Deploying Rules ---" -ForegroundColor Yellow
 
+    $successCount = 0
+    $failureCount = 0
+
     foreach ($rule in $config.rules) {
         if (-not $rule.enabled) {
             Write-Host "  Skipping (disabled in config): $($rule.name)" -ForegroundColor Gray
+            Write-Verbose "Skipped disabled rule: $($rule.name)"
             continue
         }
 
@@ -489,16 +605,26 @@ function Invoke-DeployOperation {
 
         $existing = Get-InboxRule -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $rule.name }
 
-        if ($existing) {
-            Write-Host "  Updating: $($rule.name)" -ForegroundColor Yellow
-            Set-InboxRule -Identity $existing.Identity @params -Priority $rule.priority -Enabled:$true
-        } else {
-            Write-Host "  Creating: $($rule.name)" -ForegroundColor Green
-            New-InboxRule -Name $rule.name @params -Priority $rule.priority -Enabled:$true
+        try {
+            if ($existing) {
+                Write-Host "  Updating: $($rule.name)" -ForegroundColor Yellow
+                Set-InboxRule -Identity $existing.Identity @params -Priority $rule.priority -Enabled:$true -ErrorAction Stop
+                Write-OperationLog -Operation "Deploy-Update" -RuleName $rule.name -Result "Success" -Details "Updated existing rule"
+            } else {
+                Write-Host "  Creating: $($rule.name)" -ForegroundColor Green
+                New-InboxRule -Name $rule.name @params -Priority $rule.priority -Enabled:$true -ErrorAction Stop
+                Write-OperationLog -Operation "Deploy-Create" -RuleName $rule.name -Result "Success" -Details "Created new rule"
+            }
+            $successCount++
+        } catch {
+            Write-Host "  FAILED: $($rule.name) - $($_.Exception.Message)" -ForegroundColor Red
+            Write-OperationLog -Operation "Deploy" -RuleName $rule.name -Result "Failure" -Details $_.Exception.Message
+            $failureCount++
         }
     }
 
-    Write-Host "`nDeployment complete." -ForegroundColor Green
+    Write-Host "`nDeployment complete. Success: $successCount, Failed: $failureCount" -ForegroundColor $(if ($failureCount -gt 0) { "Yellow" } else { "Green" })
+    Write-OperationLog -Operation "Deploy-Summary" -RuleName $null -Result $(if ($failureCount -gt 0) { "Warning" } else { "Success" }) -Details "Deployed $successCount rules, $failureCount failures"
 }
 
 function Invoke-EnableOperation {
@@ -616,7 +742,9 @@ function Invoke-BackupOperation {
 
     # Create backups directory
     $backupDir = Join-Path $PSScriptRoot "backups"
+    Write-Verbose "Backup directory: $backupDir"
     if (-not (Test-Path $backupDir)) {
+        Write-Verbose "Creating backup directory..."
         New-Item -ItemType Directory -Path $backupDir | Out-Null
     }
 
@@ -661,6 +789,7 @@ function Invoke-ImportOperation {
     Test-ExchangeConnection
 
     Write-Host "`n=== Importing Rules ===" -ForegroundColor Cyan
+    Write-Verbose "Import file path: $Path"
 
     if (-not (Test-Path $Path)) {
         Write-Host "ERROR: File not found: $Path" -ForegroundColor Red
@@ -880,12 +1009,23 @@ function Invoke-DeleteAllOperation {
     Write-Host "`nCreating backup before deletion..." -ForegroundColor Yellow
     Invoke-BackupOperation
 
+    Write-OperationLog -Operation "DeleteAll-Start" -RuleName $null -Result "Warning" -Details "Starting deletion of $($rules.Count) rules"
+
+    $deletedCount = 0
     foreach ($rule in $rules) {
-        Remove-InboxRule -Identity $rule.Identity -Confirm:$false
-        Write-Host "  Deleted: $($rule.Name)" -ForegroundColor Red
+        try {
+            Remove-InboxRule -Identity $rule.Identity -Confirm:$false -ErrorAction Stop
+            Write-Host "  Deleted: $($rule.Name)" -ForegroundColor Red
+            Write-OperationLog -Operation "Delete" -RuleName $rule.Name -Result "Success" -Details "Rule deleted"
+            $deletedCount++
+        } catch {
+            Write-Host "  FAILED to delete: $($rule.Name) - $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-OperationLog -Operation "Delete" -RuleName $rule.Name -Result "Failure" -Details $_.Exception.Message
+        }
     }
 
-    Write-Host "`nDeleted $($rules.Count) rules." -ForegroundColor Red
+    Write-Host "`nDeleted $deletedCount of $($rules.Count) rules." -ForegroundColor Red
+    Write-OperationLog -Operation "DeleteAll-Complete" -RuleName $null -Result "Success" -Details "Deleted $deletedCount rules"
 }
 
 function Invoke-StatsOperation {
@@ -955,6 +1095,7 @@ function Invoke-ValidateOperation {
     Test-ExchangeConnection
 
     Write-Host "`n=== Validating Rules ===" -ForegroundColor Cyan
+    Write-Verbose "Starting rule validation..."
 
     $rules = Get-RulesList
     $issues = @()
@@ -965,8 +1106,10 @@ function Invoke-ValidateOperation {
     }
 
     Write-Host "Checking $($rules.Count) rules..." -ForegroundColor Gray
+    Write-Verbose "Validation checks: disabled rules, missing conditions, missing actions, duplicate priorities, folder existence"
 
     foreach ($rule in $rules) {
+        Write-Verbose "Validating rule: $($rule.Name)"
         # Check for disabled rules
         if (-not $rule.Enabled) {
             $issues += [PSCustomObject]@{
@@ -1109,6 +1252,14 @@ function Invoke-CategoriesOperation {
 # ---------------------------
 # MAIN
 # ---------------------------
+
+Write-Verbose "Operation: $Operation"
+Write-Verbose "ConfigPath: $ConfigPath"
+Write-Verbose "ExportPath: $ExportPath"
+Write-Verbose "RuleName: $RuleName"
+Write-Verbose "Force: $Force"
+Write-Verbose "EnableAuditLog: $EnableAuditLog"
+Write-Verbose "SecurityModuleLoaded: $($script:SecurityModuleLoaded)"
 
 switch ($Operation) {
     # Rule operations
