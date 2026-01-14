@@ -21,6 +21,9 @@ exported-rules.json
 # Rule backups (may contain sensitive data)
 backups/
 
+# Audit logs (may contain operation details)
+logs/
+
 # ===================
 # POWERSNELL/SYSTEM
 # ===================

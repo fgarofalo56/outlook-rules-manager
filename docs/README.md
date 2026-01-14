@@ -21,6 +21,7 @@ Welcome to the Outlook Rules Manager documentation. This folder contains compreh
 
 | Document | Description |
 |----------|-------------|
+| [Security Policy](SECURITY.md) | Security model, threat analysis, and controls |
 | [SDL Compliance](SDL.md) | Security Development Lifecycle self-attestation |
 | [Security Questionnaire](SECURITY-QUESTIONNAIRE.md) | Admin consent request documentation |
 
