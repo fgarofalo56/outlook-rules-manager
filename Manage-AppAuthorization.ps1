@@ -41,19 +41,19 @@
     # Lists all authorized users and their roles
 
 .EXAMPLE
-    .\Manage-AppAuthorization.ps1 -Operation AddAdmin -UserPrincipalName "admin@company.com"
+    .\Manage-AppAuthorization.ps1 -Operation AddAdmin -UserPrincipalName "admin@example.com"
     # Adds a user as Administrator
 
 .EXAMPLE
-    .\Manage-AppAuthorization.ps1 -Operation AddUser -UserPrincipalName "user@company.com"
+    .\Manage-AppAuthorization.ps1 -Operation AddUser -UserPrincipalName "user@example.com"
     # Adds a user as standard User
 
 .EXAMPLE
-    .\Manage-AppAuthorization.ps1 -Operation Remove -UserPrincipalName "user@company.com"
+    .\Manage-AppAuthorization.ps1 -Operation Remove -UserPrincipalName "user@example.com"
     # Removes a user's authorization
 
 .EXAMPLE
-    .\Manage-AppAuthorization.ps1 -Operation Check -UserPrincipalName "user@company.com"
+    .\Manage-AppAuthorization.ps1 -Operation Check -UserPrincipalName "user@example.com"
     # Checks if a user is authorized and shows their role
 
 .EXAMPLE
