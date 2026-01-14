@@ -11,3 +11,9 @@ ad6f6f7bd2825d14fa6ac8f02bd1f92ee5343d61:Manage-OutlookRules.ps1:email-address:1
 
 # Security fix commit - added validation message with example format
 76553014eb3dcc3b2c222d14c961b4392468c8f3:Manage-OutlookRules.ps1:email-address:1729
+
+# Manage-AppAuthorization.ps1 - Historical commit with company.com examples (now fixed to example.com)
+6a1baebc2c4a68074953cb6914b36d5f4840ad61:Manage-AppAuthorization.ps1:email-address:44
+6a1baebc2c4a68074953cb6914b36d5f4840ad61:Manage-AppAuthorization.ps1:email-address:48
+6a1baebc2c4a68074953cb6914b36d5f4840ad61:Manage-AppAuthorization.ps1:email-address:52
+6a1baebc2c4a68074953cb6914b36d5f4840ad61:Manage-AppAuthorization.ps1:email-address:56
