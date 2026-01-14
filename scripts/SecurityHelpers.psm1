@@ -354,6 +354,106 @@ function Get-AuditLogs {
 }
 
 # ============================================
+# HTML SANITIZATION
+# ============================================
+
+function ConvertTo-SafeText {
+    <#
+    .SYNOPSIS
+        Sanitizes text to prevent HTML/script injection.
+    .DESCRIPTION
+        Removes or escapes HTML tags, script content, and dangerous characters
+        to prevent injection attacks in Out-of-Office messages.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Text,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$AllowBasicFormatting
+    )
+
+    if ([string]::IsNullOrEmpty($Text)) {
+        return $Text
+    }
+
+    # Remove script tags and content
+    $sanitized = $Text -replace '<script[^>]*>[\s\S]*?</script>', ''
+
+    # Remove style tags and content
+    $sanitized = $sanitized -replace '<style[^>]*>[\s\S]*?</style>', ''
+
+    # Remove event handlers (onclick, onerror, etc.)
+    $sanitized = $sanitized -replace '\s+on\w+\s*=\s*["\x27][^"\x27]*["\x27]', ''
+
+    # Remove javascript: and data: URLs
+    $sanitized = $sanitized -replace 'javascript:', ''
+    $sanitized = $sanitized -replace 'data:', ''
+
+    if ($AllowBasicFormatting) {
+        # Allow only safe HTML tags for basic formatting
+        $allowedTags = @('p', 'br', 'b', 'i', 'u', 'strong', 'em', 'ul', 'ol', 'li')
+        $tagPattern = '<(?!/?)(?!' + ($allowedTags -join '|') + ')([^>]+)>'
+        $sanitized = $sanitized -replace $tagPattern, ''
+    } else {
+        # Remove all HTML tags
+        $sanitized = $sanitized -replace '<[^>]+>', ''
+    }
+
+    # Escape remaining angle brackets
+    $sanitized = $sanitized -replace '<', '&lt;' -replace '>', '&gt;'
+
+    return $sanitized.Trim()
+}
+
+# ============================================
+# LOG REDACTION
+# ============================================
+
+function Protect-SensitiveLogData {
+    <#
+    .SYNOPSIS
+        Redacts sensitive information from log data.
+    .DESCRIPTION
+        Removes or masks email addresses, GUIDs, and other PII from
+        strings before logging to prevent information leakage.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Data,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$PreserveStructure
+    )
+
+    if ([string]::IsNullOrEmpty($Data)) {
+        return $Data
+    }
+
+    $redacted = $Data
+
+    # Redact email addresses (preserve domain for context)
+    $redacted = $redacted -replace '([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', '***@$2'
+
+    # Redact GUIDs (keep first 4 chars for correlation)
+    $redacted = $redacted -replace '([0-9a-fA-F]{4})[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', '$1****-****-****-****-************'
+
+    # Redact SMTP addresses
+    $redacted = $redacted -replace 'smtp:([a-zA-Z0-9._%+-]+)@', 'smtp:***@'
+
+    if (-not $PreserveStructure) {
+        # Redact potential passwords or secrets in key-value pairs
+        $redacted = $redacted -replace '(password|secret|key|token)\s*[=:]\s*["\x27]?[^"\x27,}\s]+["\x27]?', '$1=[REDACTED]'
+    }
+
+    return $redacted
+}
+
+# ============================================
 # SENSITIVE DATA DETECTION
 # ============================================
 
@@ -448,5 +548,7 @@ Export-ModuleMember -Function @(
     'Test-ConfigSchema',
     'Write-AuditLog',
     'Get-AuditLogs',
+    'ConvertTo-SafeText',
+    'Protect-SensitiveLogData',
     'Test-SensitiveData'
 )

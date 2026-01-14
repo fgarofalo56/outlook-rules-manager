@@ -51,7 +51,7 @@ repos:
         name: 📄 Validate JSON files
         exclude: '\.example\.json$'
 
-# Local hooks for custom checks
+  # Local hooks for custom checks
   - repo: local
     hooks:
       - id: check-env-files

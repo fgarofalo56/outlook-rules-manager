@@ -49,6 +49,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: false
+        with:
+          extra_args: --baseline-path .gitleaksignore
         continue-on-error: false
 
   # ============================================

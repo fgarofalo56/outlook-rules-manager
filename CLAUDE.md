@@ -106,6 +106,7 @@ Edit `rules-config.json` > `settings.noiseAction`:
 
 ## Management Operations Reference
 
+### Rule Operations
 | Operation | Command | Description |
 |-----------|---------|-------------|
 | List | `-Operation List` | Show all deployed rules |
@@ -122,8 +123,23 @@ Edit `rules-config.json` > `settings.noiseAction`:
 | DisableAll | `-Operation DisableAll` | Disable all rules |
 | Delete | `-Operation Delete -RuleName "..."` | Remove a rule |
 | DeleteAll | `-Operation DeleteAll` | Delete ALL rules (creates backup first) |
+
+### Folder Operations
+| Operation | Command | Description |
+|-----------|---------|-------------|
 | Folders | `-Operation Folders` | List inbox subfolders with counts |
 | Stats | `-Operation Stats` | Show mailbox statistics |
+
+### Mailbox Settings Operations
+| Operation | Command | Description |
+|-----------|---------|-------------|
+| OutOfOffice | `-Operation OutOfOffice` | View/set Out-of-Office auto-reply |
+| Forwarding | `-Operation Forwarding` | View/set mailbox forwarding |
+| JunkMail | `-Operation JunkMail` | View/set safe/blocked sender lists |
+
+### Utility Operations
+| Operation | Command | Description |
+|-----------|---------|-------------|
 | Validate | `-Operation Validate` | Check rules for potential issues |
 | Categories | `-Operation Categories` | List categories used in rules |
 
