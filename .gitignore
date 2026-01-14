@@ -48,6 +48,9 @@ Desktop.ini
 # JetBrains
 .idea/
 
+# Claude Code
+.claude/
+
 # ===================
 # TEMP/BUILD
 # ===================
