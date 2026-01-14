@@ -7,9 +7,12 @@ Complete guide for implementing, configuring, and using the Outlook Rules Manage
 - [System Requirements](#system-requirements)
 - [Installation](#installation)
 - [Azure AD App Registration](#azure-ad-app-registration)
+- [Authorization Setup (Security)](#authorization-setup-security)
 - [Configuration](#configuration)
 - [Authentication](#authentication)
 - [Managing Rules](#managing-rules)
+- [Mailbox Settings Operations](#mailbox-settings-operations)
+- [Multi-Account Setup](#multi-account-setup)
 - [Configuration Reference](#configuration-reference)
 - [Workflow Patterns](#workflow-patterns)
 - [Best Practices](#best-practices)
@@ -145,6 +148,75 @@ This script:
    $ClientId = "your-client-id-here"
    $TenantId = "your-tenant-id-here"
    ```
+
+---
+
+## Authorization Setup (Security)
+
+After registering the app, configure multi-tier authorization to control who can use the application.
+
+### Why Authorization Matters
+
+By default, any user who can authenticate could potentially use your app. The authorization layer ensures:
+- Only explicitly approved users can access the application
+- Different users can have different permission levels (Admin vs User)
+- Access changes are logged in Azure AD audit logs
+
+### Quick Setup (Recommended)
+
+```powershell
+# After registering the app, run:
+.\Manage-AppAuthorization.ps1 -Operation Setup
+```
+
+This automatically:
+1. Enables "User Assignment Required"
+2. Assigns you as Administrator
+
+### Manual Setup
+
+If you prefer manual configuration:
+
+#### Step 1: Enable User Assignment Required
+
+1. Go to [Azure Portal](https://portal.azure.com) → **Microsoft Entra ID**
+2. Navigate to **Enterprise Applications** → Select your app
+3. Click **Properties**
+4. Set **Assignment required?** to **Yes**
+5. Click **Save**
+
+#### Step 2: Assign Users
+
+```powershell
+# Connect with required permissions
+Connect-MgGraph -Scopes "AppRoleAssignment.ReadWrite.All","User.Read.All"
+
+# Add yourself as Administrator
+.\Manage-AppAuthorization.ps1 -Operation AddAdmin -UserPrincipalName "your-email@domain.com"
+
+# Add other users
+.\Manage-AppAuthorization.ps1 -Operation AddUser -UserPrincipalName "colleague@domain.com"
+```
+
+### Authorization Management Commands
+
+| Operation | Command | Description |
+|-----------|---------|-------------|
+| Setup | `-Operation Setup` | Initial security setup |
+| Status | `-Operation Status` | Show authorization configuration |
+| List | `-Operation List` | List all authorized users |
+| AddAdmin | `-Operation AddAdmin -UserPrincipalName "..."` | Add administrator |
+| AddUser | `-Operation AddUser -UserPrincipalName "..."` | Add standard user |
+| Remove | `-Operation Remove -UserPrincipalName "..."` | Remove authorization |
+| Check | `-Operation Check -UserPrincipalName "..."` | Check user's authorization |
+
+### Authorization Tiers
+
+| Tier | Role | Capabilities |
+|------|------|--------------|
+| **Owner** | Service Principal Owner | Manage admins, full control |
+| **Admin** | OutlookRules.Admin | Add/remove users, all app operations |
+| **User** | OutlookRules.User | Manage own mailbox only |
 
 ---
 
@@ -417,6 +489,137 @@ Get-InboxRule
 # Pull current rules into config file
 .\Manage-OutlookRules.ps1 -Operation Pull
 ```
+
+---
+
+## Mailbox Settings Operations
+
+Beyond inbox rules, the tool provides management of additional mailbox settings.
+
+### Out-of-Office (Auto-Reply)
+
+```powershell
+# View current Out-of-Office settings
+.\Manage-OutlookRules.ps1 -Operation OutOfOffice
+
+# Enable Out-of-Office with a message
+.\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
+    -OOOInternal "I'm away from the office until Monday."
+
+# Enable with different internal/external messages
+.\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
+    -OOOInternal "I'm away - contact my team for urgent matters." `
+    -OOOExternal "Thank you for your email. I'm currently out of office."
+
+# Schedule Out-of-Office for specific dates
+.\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
+    -OOOStartDate "2024-12-23" -OOOEndDate "2024-12-27" `
+    -OOOInternal "Away for the holidays. Back on the 27th."
+
+# Disable Out-of-Office
+.\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $false
+```
+
+### Email Forwarding
+
+```powershell
+# View current forwarding settings
+.\Manage-OutlookRules.ps1 -Operation Forwarding
+
+# Enable forwarding to another address (keep copy in mailbox)
+.\Manage-OutlookRules.ps1 -Operation Forwarding `
+    -ForwardingAddress "backup@company.com" `
+    -ForwardingEnabled $true `
+    -DeliverToMailbox $true
+
+# Enable forwarding without keeping a local copy
+.\Manage-OutlookRules.ps1 -Operation Forwarding `
+    -ForwardingAddress "delegate@company.com" `
+    -ForwardingEnabled $true `
+    -DeliverToMailbox $false
+
+# Disable forwarding
+.\Manage-OutlookRules.ps1 -Operation Forwarding -ForwardingEnabled $false
+```
+
+### Junk Mail Settings
+
+```powershell
+# View junk mail settings (safe/blocked senders)
+.\Manage-OutlookRules.ps1 -Operation JunkMail
+
+# Add safe senders (emails from these won't go to junk)
+.\Manage-OutlookRules.ps1 -Operation JunkMail `
+    -SafeSenders "trusted@partner.com","notifications@service.com"
+
+# Add blocked senders (emails go directly to junk)
+.\Manage-OutlookRules.ps1 -Operation JunkMail `
+    -BlockedSenders "spam@example.com","unwanted@domain.com"
+
+# Add safe recipients (your sent emails to these addresses are trusted)
+.\Manage-OutlookRules.ps1 -Operation JunkMail `
+    -SafeRecipients "team@company.com"
+```
+
+---
+
+## Multi-Account Setup
+
+Manage multiple email accounts (personal + work) using configuration profiles.
+
+### Creating Profile-Specific Configurations
+
+1. **Create environment files for each account:**
+
+   ```powershell
+   # Copy template for personal account
+   Copy-Item examples\.env.example .env.personal
+   # Edit with your personal tenant's ClientId and TenantId
+
+   # Copy template for work account
+   Copy-Item examples\.env.example .env.work
+   # Edit with your work tenant's ClientId and TenantId
+   ```
+
+2. **Create rules configs for each account (optional):**
+
+   ```powershell
+   # Personal email rules
+   Copy-Item examples\rules-config.example.json rules-config.personal.json
+
+   # Work email rules
+   Copy-Item examples\rules-config.example.json rules-config.work.json
+   ```
+
+3. **Each profile needs its own Azure AD app registration** in its respective tenant.
+
+### Using Profiles
+
+```powershell
+# Connect to personal account
+.\Connect-OutlookRulesApp.ps1 -ConfigProfile personal
+
+# Manage personal email rules
+.\Manage-OutlookRules.ps1 -Operation List -ConfigProfile personal
+.\Manage-OutlookRules.ps1 -Operation Deploy -ConfigProfile personal
+
+# Connect to work account
+.\Connect-OutlookRulesApp.ps1 -ConfigProfile work
+
+# Manage work email rules
+.\Manage-OutlookRules.ps1 -Operation List -ConfigProfile work
+.\Manage-OutlookRules.ps1 -Operation Deploy -ConfigProfile work
+```
+
+### Profile Files
+
+| Profile | Environment File | Rules Config | Export File |
+|---------|-----------------|--------------|-------------|
+| (default) | `.env` | `rules-config.json` | `exported-rules.json` |
+| personal | `.env.personal` | `rules-config.personal.json` | `exported-rules.personal.json` |
+| work | `.env.work` | `rules-config.work.json` | `exported-rules.work.json` |
+
+**Security Note:** All `.env*` and `rules-config*.json` files are gitignored to prevent accidental commits of tenant IDs and email addresses.
 
 ---
 

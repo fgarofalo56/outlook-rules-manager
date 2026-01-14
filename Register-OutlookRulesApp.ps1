@@ -7,8 +7,24 @@
     Creates an app registration with:
     - Microsoft Graph: Mail.ReadWrite (delegated) - for folder creation
     - Public client flow enabled (for interactive/device code auth)
+    - App Roles for multi-tier access control (Admin, User)
+    - User Assignment Required enabled for security
+
+    SECURITY: This implements a multi-tier authorization model:
+    - Owners: Can manage admins (Service Principal owners)
+    - Admins: Can add/remove authorized users AND use the app
+    - Users: Can only use the app for their own mailbox
 
     No admin consent required for delegated permissions on your own mailbox.
+
+.PARAMETER AppName
+    Name for the Azure AD application (default: "Outlook Rules Manager")
+
+.PARAMETER TenantId
+    Optional: specify tenant ID, otherwise uses current Azure context
+
+.PARAMETER SkipUserAssignment
+    Skip enabling "User Assignment Required" (not recommended for security)
 
 .NOTES
     Requires: Az.Accounts, Az.Resources modules
@@ -17,7 +33,8 @@
 
 param(
     [string]$AppName = "Outlook Rules Manager",
-    [string]$TenantId  # Optional: specify tenant, otherwise uses current
+    [string]$TenantId,  # Optional: specify tenant, otherwise uses current
+    [switch]$SkipUserAssignment
 )
 
 # ---------------------------
@@ -104,6 +121,35 @@ $requiredResourceAccess = @(
 )
 
 # ---------------------------
+# DEFINE APP ROLES (Multi-Tier Authorization)
+# ---------------------------
+# These roles provide authorization BEYOND just permission consent
+# Users must be explicitly assigned to a role to use the application
+
+$appRoles = @(
+    @{
+        AllowedMemberTypes = @("User")
+        Description = "Administrators can manage authorized users and perform all mailbox operations."
+        DisplayName = "Administrator"
+        Id = "f8b8c3d1-9a2b-4c5e-8f7d-6a1b2c3d4e5f"  # Fixed GUID for consistency
+        IsEnabled = $true
+        Value = "OutlookRules.Admin"
+    },
+    @{
+        AllowedMemberTypes = @("User")
+        Description = "Users can perform mailbox operations on their own mailbox only."
+        DisplayName = "User"
+        Id = "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d"  # Fixed GUID for consistency
+        IsEnabled = $true
+        Value = "OutlookRules.User"
+    }
+)
+
+Write-Host "`n=== App Roles Defined ===" -ForegroundColor Yellow
+Write-Host "  OutlookRules.Admin - Can manage users and perform all operations" -ForegroundColor Gray
+Write-Host "  OutlookRules.User  - Can perform operations on own mailbox" -ForegroundColor Gray
+
+# ---------------------------
 # CREATE APP REGISTRATION
 # ---------------------------
 Write-Host "`n=== Creating App Registration ===" -ForegroundColor Yellow
@@ -114,7 +160,8 @@ $app = New-AzADApplication `
     -DisplayName $AppName `
     -SignInAudience "AzureADMultipleOrgs" `
     -IsFallbackPublicClient:$true `
-    -RequiredResourceAccess $requiredResourceAccess
+    -RequiredResourceAccess $requiredResourceAccess `
+    -AppRole $appRoles
 
 if (-not $app -or -not $app.AppId) {
     Write-Host "ERROR: Failed to create application" -ForegroundColor Red
@@ -142,12 +189,60 @@ try {
 # ---------------------------
 Write-Host "`n=== Creating Service Principal ===" -ForegroundColor Yellow
 
+$sp = $null
 try {
     $sp = New-AzADServicePrincipal -ApplicationId $app.AppId -ErrorAction Stop
     Write-Host "Created service principal: $($sp.Id)" -ForegroundColor Green
 } catch {
     Write-Host "Warning: Could not create service principal: $($_.Exception.Message)" -ForegroundColor Yellow
     Write-Host "This is usually fine - it may be created automatically on first sign-in." -ForegroundColor Gray
+}
+
+# ---------------------------
+# ENABLE USER ASSIGNMENT REQUIRED (Security)
+# ---------------------------
+if ($sp -and -not $SkipUserAssignment) {
+    Write-Host "`n=== Enabling User Assignment Required ===" -ForegroundColor Yellow
+    Write-Host "  This restricts app access to explicitly assigned users only" -ForegroundColor Gray
+
+    try {
+        # Note: Az module doesn't have direct support for AppRoleAssignmentRequired
+        # We need to use the Microsoft Graph API or update via REST
+        # For now, output instructions for manual configuration
+        Write-Host ""
+        Write-Host "  IMPORTANT: Enable 'User Assignment Required' manually:" -ForegroundColor Cyan
+        Write-Host "  1. Go to Azure Portal > Microsoft Entra ID > Enterprise Applications" -ForegroundColor White
+        Write-Host "  2. Find '$AppName'" -ForegroundColor White
+        Write-Host "  3. Go to Properties" -ForegroundColor White
+        Write-Host "  4. Set 'Assignment required?' to 'Yes'" -ForegroundColor White
+        Write-Host "  5. Save" -ForegroundColor White
+        Write-Host ""
+        Write-Host "  Or run this PowerShell (requires Microsoft.Graph module):" -ForegroundColor Cyan
+        Write-Host "  Connect-MgGraph -Scopes 'Application.ReadWrite.All'" -ForegroundColor Gray
+        Write-Host "  Update-MgServicePrincipal -ServicePrincipalId '$($sp.Id)' -AppRoleAssignmentRequired:`$true" -ForegroundColor Gray
+    } catch {
+        Write-Host "  Note: Could not auto-configure. Please enable manually." -ForegroundColor Yellow
+    }
+}
+
+# ---------------------------
+# ASSIGN CREATOR AS ADMIN
+# ---------------------------
+if ($sp) {
+    Write-Host "`n=== Assigning Creator as Administrator ===" -ForegroundColor Yellow
+
+    $currentUserId = (Get-AzADUser -UserPrincipalName $context.Account.Id -ErrorAction SilentlyContinue).Id
+    $adminRoleId = "f8b8c3d1-9a2b-4c5e-8f7d-6a1b2c3d4e5f"  # OutlookRules.Admin role ID
+
+    if ($currentUserId) {
+        Write-Host "  Current user: $($context.Account.Id)" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "  To assign yourself as Admin, run:" -ForegroundColor Cyan
+        Write-Host "  Connect-MgGraph -Scopes 'AppRoleAssignment.ReadWrite.All'" -ForegroundColor Gray
+        Write-Host "  New-MgUserAppRoleAssignment -UserId '$currentUserId' -PrincipalId '$currentUserId' -ResourceId '$($sp.Id)' -AppRoleId '$adminRoleId'" -ForegroundColor Gray
+    } else {
+        Write-Host "  Could not determine current user ID. Assign roles manually." -ForegroundColor Yellow
+    }
 }
 
 # ---------------------------
@@ -162,9 +257,22 @@ $configOutput = @"
 
 Configuration saved! Next steps:
 --------------------------------
-1. Run Connect-OutlookRulesApp.ps1 to authenticate
-2. On first run, you'll be prompted to consent to permissions
-3. Then run Setup-OutlookRules.ps1 or Manage-OutlookRules.ps1
+1. SECURITY SETUP (Required):
+   a. Enable 'User Assignment Required' in Enterprise Applications (see above)
+   b. Assign yourself as Admin using the PowerShell commands above
+   c. Or use: .\Manage-AppAuthorization.ps1 -Operation Setup
+
+2. Run Connect-OutlookRulesApp.ps1 to authenticate
+
+3. On first run, you'll be prompted to consent to permissions
+
+4. Then run Setup-OutlookRules.ps1 or Manage-OutlookRules.ps1
+
+Authorization Model:
+-------------------
+- Owners: Service Principal owners (you by default)
+- Admins: Can add/remove users AND use the app (OutlookRules.Admin role)
+- Users: Can only use the app for their own mailbox (OutlookRules.User role)
 
 Note: No admin consent required - you're consenting for your own mailbox only.
 

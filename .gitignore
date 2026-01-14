@@ -13,10 +13,12 @@ app-config.json
 
 # Rules config (contains personal email addresses)
 rules-config.json
+rules-config.*.json
 !examples/rules-config.example.json
 
 # Exported rules (may contain email addresses)
 exported-rules.json
+exported-rules.*.json
 
 # Rule backups (may contain sensitive data)
 backups/

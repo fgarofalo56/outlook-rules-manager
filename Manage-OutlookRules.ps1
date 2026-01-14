@@ -44,6 +44,11 @@
 .PARAMETER ExportPath
     Path for Export operation output (default: ./exported-rules.json)
 
+.PARAMETER ConfigProfile
+    Profile name for multi-account support. Uses .env.{profile} and rules-config.{profile}.json.
+    Example: -ConfigProfile personal uses rules-config.personal.json
+    Example: -ConfigProfile work uses rules-config.work.json
+
 .PARAMETER Force
     Skip confirmation prompts for destructive operations
 
@@ -129,6 +134,14 @@
 .EXAMPLE
     .\Manage-OutlookRules.ps1 -Operation Deploy -EnableAuditLog
     # Deploy with audit logging enabled
+
+.EXAMPLE
+    .\Manage-OutlookRules.ps1 -Operation List -ConfigProfile personal
+    # List rules for personal email account (uses .env.personal)
+
+.EXAMPLE
+    .\Manage-OutlookRules.ps1 -Operation Deploy -ConfigProfile work
+    # Deploy rules for work email using rules-config.work.json
 #>
 
 [CmdletBinding()]
@@ -146,10 +159,13 @@ param(
     [string]$RuleName,
 
     [Parameter(Mandatory = $false)]
-    [string]$ConfigPath = (Join-Path $PSScriptRoot "rules-config.json"),
+    [string]$ConfigProfile,
 
     [Parameter(Mandatory = $false)]
-    [string]$ExportPath = (Join-Path $PSScriptRoot "exported-rules.json"),
+    [string]$ConfigPath,
+
+    [Parameter(Mandatory = $false)]
+    [string]$ExportPath,
 
     [switch]$Force,
 
@@ -192,6 +208,30 @@ param(
     [Parameter(Mandatory = $false)]
     [string[]]$SafeRecipients
 )
+
+# ---------------------------
+# PROFILE RESOLUTION
+# ---------------------------
+
+# Set default paths based on ConfigProfile
+if ($ConfigProfile) {
+    if (-not $ConfigPath) {
+        $ConfigPath = Join-Path $PSScriptRoot "rules-config.$ConfigProfile.json"
+    }
+    if (-not $ExportPath) {
+        $ExportPath = Join-Path $PSScriptRoot "exported-rules.$ConfigProfile.json"
+    }
+    $script:ProfileDisplay = "[$ConfigProfile]"
+    Write-Host "Using profile: $ConfigProfile" -ForegroundColor Cyan
+} else {
+    if (-not $ConfigPath) {
+        $ConfigPath = Join-Path $PSScriptRoot "rules-config.json"
+    }
+    if (-not $ExportPath) {
+        $ExportPath = Join-Path $PSScriptRoot "exported-rules.json"
+    }
+    $script:ProfileDisplay = ""
+}
 
 # ---------------------------
 # SECURITY MODULE
@@ -246,7 +286,8 @@ function Test-ExchangeConnection {
     $conn = Get-ConnectionInformation -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*ExchangeOnline*" }
     if (-not $conn) {
         Write-Host "ERROR: Not connected to Exchange Online." -ForegroundColor Red
-        Write-Host "Run: .\Connect-OutlookRulesApp.ps1" -ForegroundColor Yellow
+        $connectCmd = if ($ConfigProfile) { ".\Connect-OutlookRulesApp.ps1 -ConfigProfile $ConfigProfile" } else { ".\Connect-OutlookRulesApp.ps1" }
+        Write-Host "Run: $connectCmd" -ForegroundColor Yellow
         exit 1
     }
     Write-Verbose "Exchange Online connected: $($conn.UserPrincipalName)"
@@ -257,7 +298,8 @@ function Test-GraphConnection {
     $ctx = Get-MgContext -ErrorAction SilentlyContinue
     if (-not $ctx) {
         Write-Host "ERROR: Not connected to Microsoft Graph." -ForegroundColor Red
-        Write-Host "Run: .\Connect-OutlookRulesApp.ps1" -ForegroundColor Yellow
+        $connectCmd = if ($ConfigProfile) { ".\Connect-OutlookRulesApp.ps1 -ConfigProfile $ConfigProfile" } else { ".\Connect-OutlookRulesApp.ps1" }
+        Write-Host "Run: $connectCmd" -ForegroundColor Yellow
         exit 1
     }
     Write-Verbose "Microsoft Graph connected: $($ctx.Account) with scopes: $($ctx.Scopes -join ', ')"

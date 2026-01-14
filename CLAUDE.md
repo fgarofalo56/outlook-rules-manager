@@ -4,6 +4,86 @@
 
 PowerShell-based automation for managing Outlook inbox organization via Microsoft Graph and Exchange Online. Creates server-side rules and folders to automatically triage email.
 
+---
+
+## CRITICAL: Security-by-Design Development Rules
+
+### Rule 1: Pre-Commit Security Validation (MANDATORY)
+
+**BEFORE committing ANY code changes, Claude MUST run security scans locally:**
+
+```powershell
+# 1. Run the pre-commit security check script
+.\scripts\Check-BeforeCommit.ps1
+
+# 2. Run Gitleaks locally to detect secrets
+gitleaks detect --source . --verbose
+
+# 3. Run PSScriptAnalyzer for PowerShell security rules
+Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error,Warning
+
+# 4. Verify no sensitive files are staged
+git diff --cached --name-only | Select-String -Pattern '\.env|rules-config\.json|app-config\.json'
+```
+
+**If ANY scan fails or detects issues:**
+- DO NOT commit
+- Fix all issues first
+- Re-run all scans until clean
+- Document any false positives in `.gitleaksignore`
+
+### Rule 2: Never Commit Sensitive Data
+
+**ABSOLUTELY FORBIDDEN to commit:**
+- `.env` files (any profile)
+- `rules-config.json` or `rules-config.*.json`
+- `app-config.json`
+- `exported-rules.json`
+- Any file containing: Client IDs, Tenant IDs, email addresses, GUIDs
+
+**Before every commit, verify:**
+```powershell
+# Check what's staged
+git status
+
+# Verify gitignore is working
+git check-ignore -v .env rules-config.json
+```
+
+### Rule 3: Input Validation on All User Data
+
+**All user-provided data MUST be validated:**
+- Email addresses: Use `Test-EmailAddress` from SecurityHelpers
+- Domains: Use `Test-DomainName` from SecurityHelpers
+- HTML content (OOO messages): Use `ConvertTo-SafeText` sanitization
+- File paths: Validate against path traversal
+
+### Rule 4: Security Module Required
+
+**The SecurityHelpers module MUST be loaded for:**
+- Any operation accepting email addresses
+- Any operation with forwarding/redirect
+- Any operation writing OOO messages
+- Audit logging operations
+
+### Rule 5: Authorization Layer Enforcement
+
+**This application implements multi-tier access control:**
+
+| Tier | Role | Capabilities |
+|------|------|--------------|
+| Owner | Service Principal Owner | Manage admins, full control |
+| Admin | `OutlookRules.Admin` role | Add/remove authorized users, use app |
+| User | `OutlookRules.User` role | Use app for own mailbox only |
+
+**Authorization is enforced at TWO levels:**
+1. **Azure AD Level**: "User Assignment Required" blocks unapproved users at sign-in
+2. **Script Level**: Role claims validated before allowing operations
+
+**NEVER bypass authorization checks. NEVER disable "User Assignment Required".**
+
+---
+
 ## Architecture
 
 ```
@@ -14,16 +94,20 @@ outlook-rules-manager/
 │       └── security-scan.yml
 ├── docs/                          # Documentation
 │   ├── rules-cheatsheet.md
+│   ├── USER-GUIDE.md
+│   ├── SECURITY.md
 │   ├── SDL.md
 │   └── SECURITY-QUESTIONNAIRE.md
 ├── examples/                      # Example configuration files
 │   ├── .env.example
 │   └── rules-config.example.json
 ├── scripts/                       # Utility scripts
-│   └── Check-BeforeCommit.ps1
+│   ├── Check-BeforeCommit.ps1
+│   └── SecurityHelpers.psm1
 ├── Install-Prerequisites.ps1      # Module installation script
-├── Register-OutlookRulesApp.ps1   # Azure AD app registration (run once)
-├── Connect-OutlookRulesApp.ps1    # Authentication helper
+├── Register-OutlookRulesApp.ps1   # Azure AD app registration (with app roles)
+├── Connect-OutlookRulesApp.ps1    # Authentication + authorization validation
+├── Manage-AppAuthorization.ps1    # User authorization management
 ├── Setup-OutlookRules.ps1         # One-shot rules/folders creation
 ├── Manage-OutlookRules.ps1        # Full management CLI
 ├── rules-config.json              # Declarative rule definitions (gitignored)
@@ -41,6 +125,7 @@ outlook-rules-manager/
 |------|---------|----------------|
 | `rules-config.json` | All rule definitions | Adding/changing rules |
 | `Manage-OutlookRules.ps1` | Management operations | Adding new operations |
+| `Manage-AppAuthorization.ps1` | User authorization | Adding/removing users |
 | `Setup-OutlookRules.ps1` | Legacy one-shot setup | Rarely - use config instead |
 
 ## Key APIs & Modules
@@ -57,8 +142,10 @@ outlook-rules-manager/
 | File | Purpose | Gitignored? |
 |------|---------|-------------|
 | `.env` | Azure AD ClientId/TenantId (primary) | Yes |
+| `.env.{profile}` | Profile-specific Azure AD config (e.g., `.env.personal`) | Yes |
 | `app-config.json` | Azure AD config backup (JSON format) | Yes |
 | `rules-config.json` | Rule definitions, sender lists, keywords | Yes |
+| `rules-config.{profile}.json` | Profile-specific rules (e.g., `rules-config.work.json`) | Yes |
 | `exported-rules.json` | Backup of deployed rules | Yes |
 | `examples/.env.example` | Example .env template | No |
 | `examples/rules-config.example.json` | Example rules config template | No |
@@ -243,6 +330,26 @@ Get-ConnectionInformation
 # Re-enable all rules
 .\Manage-OutlookRules.ps1 -Operation EnableAll
 ```
+
+### Multi-Account Management
+```powershell
+# Connect to personal email account
+.\Connect-OutlookRulesApp.ps1 -ConfigProfile personal
+
+# Deploy rules to personal account
+.\Manage-OutlookRules.ps1 -Operation Deploy -ConfigProfile personal
+
+# Connect to work email account
+.\Connect-OutlookRulesApp.ps1 -ConfigProfile work
+
+# List rules on work account
+.\Manage-OutlookRules.ps1 -Operation List -ConfigProfile work
+```
+
+Profile files:
+- `.env.personal` + `rules-config.personal.json` for personal email
+- `.env.work` + `rules-config.work.json` for work email
+- Each profile needs its own Azure AD app registration in the respective tenant
 
 ## Security Considerations
 

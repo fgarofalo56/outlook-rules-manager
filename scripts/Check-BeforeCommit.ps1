@@ -131,11 +131,14 @@ $placeholderGuid = '00000000-0000-0000-0000-000000000000'
 
 # Microsoft Graph API standard permission GUIDs (public constants, not secrets)
 # See: https://learn.microsoft.com/en-us/graph/permissions-reference
+# App Role GUIDs are also allowed - these are fixed identifiers for the authorization model
 $allowedGuids = @(
     '00000003-0000-0000-c000-000000000000',  # Microsoft Graph Application ID
     'e383f46e-2787-4529-855e-0e479a3ffac0',  # Mail.ReadWrite
     '570282fd-fa5c-430d-a7fd-fc8dc98a9dca',  # Mail.Read
-    'e1fe6dd8-ba31-4d61-89e7-88639da4683d'   # User.Read
+    'e1fe6dd8-ba31-4d61-89e7-88639da4683d',  # User.Read
+    'f8b8c3d1-9a2b-4c5e-8f7d-6a1b2c3d4e5f',  # OutlookRules.Admin app role
+    'a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d'   # OutlookRules.User app role
 )
 
 $guidIssues = 0

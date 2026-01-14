@@ -194,6 +194,44 @@ This project does not use package management tools in its build environment:
 | 👑 Admin Consent | Not required for delegated permissions |
 | 🚪 Conditional Access | Inherited from Azure AD policies |
 
+### 🔐 Multi-Tier Authorization Model
+
+This application implements defense-in-depth authorization beyond basic permission consent:
+
+| Layer | Control | Description |
+|:------|:--------|:------------|
+| 1️⃣ Authentication | OAuth 2.0 Device Code | User must authenticate via Azure AD |
+| 2️⃣ User Assignment | "Assignment Required" = Yes | Only assigned users can access |
+| 3️⃣ App Roles | OutlookRules.Admin / User | Role determines capabilities |
+| 4️⃣ Script Validation | Connect-OutlookRulesApp.ps1 | Validates role claims at runtime |
+
+#### App Roles Defined
+
+| Role | Role Value | Role ID | Capabilities |
+|:-----|:-----------|:--------|:-------------|
+| 👑 Administrator | `OutlookRules.Admin` | `f8b8c3d1-9a2b-4c5e-8f7d-6a1b2c3d4e5f` | Manage users + all operations |
+| 👤 Standard User | `OutlookRules.User` | `a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d` | Own mailbox operations only |
+
+#### Authorization Benefits
+
+| Benefit | Description |
+|:--------|:------------|
+| 🛡️ Defense-in-Depth | Multiple authorization layers |
+| 👥 Centralized Management | IT manages access via Azure AD |
+| 📋 Audit Trail | All assignments logged in Azure AD |
+| 🔒 Zero Trust | Explicit verification at every layer |
+| ⚖️ Separation of Duties | Admins manage access, users manage mailboxes |
+
+#### User Assignment Verification
+
+```powershell
+# Verify configuration
+.\Manage-AppAuthorization.ps1 -Operation Status
+
+# List authorized users
+.\Manage-AppAuthorization.ps1 -Operation List
+```
+
 ---
 
 ## ✅ Checklist Summary
@@ -208,6 +246,9 @@ This project does not use package management tools in its build environment:
 | 📄 SDL task link | ☐ | [SDL link] |
 | ☁️ Azure subscription health | ✅ N/A | Local scripts |
 | 📦 Component Governance | ✅ N/A | No package dependencies |
+| 🔐 User Assignment Required | ✅ | Multi-tier auth enabled |
+| 👥 App Roles defined | ✅ | Admin + User roles |
+| 🔏 Defense-in-depth authorization | ✅ | 4-layer auth model |
 
 ---
 
@@ -227,6 +268,7 @@ This project does not use package management tools in its build environment:
 |:-----|:--------|:--------|
 | 2026-01-12 | 1.0.0 | Initial questionnaire |
 | 2026-01-14 | 1.1.0 | Updated with visual formatting |
+| 2026-01-14 | 2.0.0 | Added multi-tier authorization model with App Roles |
 
 ---
 

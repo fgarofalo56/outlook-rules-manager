@@ -10,6 +10,11 @@
 
     DEFAULTS TO DEVICE CODE FLOW for SPACE/ACE compliance (localhost redirect URIs not allowed).
 
+.PARAMETER ConfigProfile
+    Profile name for multi-account support. Loads .env.{profile} instead of .env.
+    Example: -ConfigProfile personal loads .env.personal
+    Example: -ConfigProfile work loads .env.work
+
 .PARAMETER UseDeviceCode
     Use device code flow (DEFAULT). Displays a code to enter at microsoft.com/devicelogin.
     This is the default because localhost redirect URIs are not allowed by SPACE compliance.
@@ -24,11 +29,20 @@
     # Device code flow (default) - displays code to enter at microsoft.com/devicelogin
 
 .EXAMPLE
+    .\Connect-OutlookRulesApp.ps1 -ConfigProfile personal
+    # Connect using .env.personal configuration for personal email management
+
+.EXAMPLE
+    .\Connect-OutlookRulesApp.ps1 -ConfigProfile work
+    # Connect using .env.work configuration for work email management
+
+.EXAMPLE
     .\Connect-OutlookRulesApp.ps1 -Interactive
     # Interactive browser login (requires native client redirect URI configured)
 #>
 
 param(
+    [string]$ConfigProfile,
     [switch]$UseDeviceCode,
     [switch]$Interactive  # Use interactive browser flow (requires native client redirect URI)
 )
@@ -41,10 +55,19 @@ if (-not $Interactive) {
 
 # ---------------------------
 # CONFIGURATION
-# Load from .env (primary) or app-config.json (fallback)
+# Load from .env.{profile} (if profile specified), .env (primary), or app-config.json (fallback)
 # ---------------------------
-$envFile = Join-Path $PSScriptRoot ".env"
-$configFile = Join-Path $PSScriptRoot "app-config.json"
+
+# Determine which env file to load based on profile
+if ($ConfigProfile) {
+    $envFile = Join-Path $PSScriptRoot ".env.$ConfigProfile"
+    $configFile = Join-Path $PSScriptRoot "app-config.$ConfigProfile.json"
+    $profileDisplay = "[$ConfigProfile]"
+} else {
+    $envFile = Join-Path $PSScriptRoot ".env"
+    $configFile = Join-Path $PSScriptRoot "app-config.json"
+    $profileDisplay = "[default]"
+}
 
 if (Test-Path $envFile) {
     # Parse .env file (supports both formats: KEY=value and $KEY = "value")
@@ -60,18 +83,23 @@ if (Test-Path $envFile) {
             }
         }
     }
-    Write-Host "Loaded config from .env" -ForegroundColor Green
+    Write-Host "Loaded config from $(Split-Path $envFile -Leaf) $profileDisplay" -ForegroundColor Green
 } elseif (Test-Path $configFile) {
     # Fallback to JSON config
     $config = Get-Content $configFile | ConvertFrom-Json
     $ClientId = $config.ClientId
     $TenantId = $config.TenantId
-    Write-Host "Loaded config from app-config.json" -ForegroundColor Green
+    Write-Host "Loaded config from $(Split-Path $configFile -Leaf) $profileDisplay" -ForegroundColor Green
 } else {
     Write-Host "ERROR: No configuration found!" -ForegroundColor Red
+    if ($ConfigProfile) {
+        Write-Host "Profile '$ConfigProfile' specified but no config file found." -ForegroundColor Red
+        Write-Host "Expected: .env.$ConfigProfile or app-config.$ConfigProfile.json" -ForegroundColor Yellow
+    }
     Write-Host "Either:" -ForegroundColor Yellow
     Write-Host "  1. Run Register-OutlookRulesApp.ps1 first to create .env" -ForegroundColor Yellow
     Write-Host "  2. Create .env with ClientId and TenantId values" -ForegroundColor Yellow
+    Write-Host "  3. For multi-account: Create .env.<profile> (e.g., .env.personal, .env.work)" -ForegroundColor Yellow
     exit 1
 }
 
@@ -81,7 +109,7 @@ if (-not $ClientId -or -not $TenantId) {
     exit 1
 }
 
-Write-Host "`n=== Outlook Rules Connection ===" -ForegroundColor Cyan
+Write-Host "`n=== Outlook Rules Connection $profileDisplay ===" -ForegroundColor Cyan
 Write-Host "Client ID: $ClientId" -ForegroundColor Gray
 Write-Host "Tenant ID: $TenantId" -ForegroundColor Gray
 
@@ -198,5 +226,52 @@ try {
     Write-Host "Exchange FAILED - Cannot access rules: $($_.Exception.Message)" -ForegroundColor Red
 }
 
+# ---------------------------
+# VERIFY AUTHORIZATION (App Role Assignment)
+# ---------------------------
+Write-Host "`n=== Authorization Check ===" -ForegroundColor Cyan
+
+try {
+    # Get the service principal for this app
+    $sp = Get-MgServicePrincipal -Filter "AppId eq '$ClientId'" -ErrorAction SilentlyContinue
+
+    if ($sp) {
+        $currentUserUpn = (Get-MgContext).Account
+        $currentUser = Get-MgUser -Filter "userPrincipalName eq '$currentUserUpn'" -ErrorAction SilentlyContinue
+        if (-not $currentUser) {
+            $currentUser = Get-MgUser -Filter "mail eq '$currentUserUpn'" -ErrorAction SilentlyContinue
+        }
+
+        if ($currentUser) {
+            $assignment = Get-MgUserAppRoleAssignment -UserId $currentUser.Id -ErrorAction SilentlyContinue |
+                Where-Object { $_.ResourceId -eq $sp.Id }
+
+            if ($assignment) {
+                $roleName = switch ($assignment.AppRoleId) {
+                    "f8b8c3d1-9a2b-4c5e-8f7d-6a1b2c3d4e5f" { "Administrator" }
+                    "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d" { "User" }
+                    default { "Unknown" }
+                }
+                Write-Host "Authorization OK - Role: $roleName" -ForegroundColor Green
+            } else {
+                if ($sp.AppRoleAssignmentRequired) {
+                    Write-Host "Authorization FAILED - User not assigned to application" -ForegroundColor Red
+                    Write-Host "Contact an administrator or run: .\Manage-AppAuthorization.ps1 -Operation Setup" -ForegroundColor Yellow
+                } else {
+                    Write-Host "Authorization: Not configured (User Assignment not required)" -ForegroundColor Yellow
+                    Write-Host "For better security, run: .\Manage-AppAuthorization.ps1 -Operation Setup" -ForegroundColor Gray
+                }
+            }
+        } else {
+            Write-Host "Authorization: Could not verify (user lookup failed)" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "Authorization: Not configured (service principal not found)" -ForegroundColor Yellow
+        Write-Host "This may be normal for first-time setup" -ForegroundColor Gray
+    }
+} catch {
+    Write-Host "Authorization: Could not verify - $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
 Write-Host "`n=== Ready ===" -ForegroundColor Green
-Write-Host "You can now run: .\Setup-OutlookRules.ps1" -ForegroundColor White
+Write-Host "You can now run: .\Manage-OutlookRules.ps1 -Operation List" -ForegroundColor White
