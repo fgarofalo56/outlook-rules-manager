@@ -76,3 +76,4 @@ node_modules/
 # Scan results (may contain sensitive paths)
 **/sarif-results/
 *.sarif
+tests/TestResults.xml
