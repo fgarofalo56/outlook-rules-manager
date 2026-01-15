@@ -87,13 +87,20 @@ $script:AdminRoleId = "f8b8c3d1-9a2b-4c5e-8f7d-6a1b2c3d4e5f"
 $script:UserRoleId = "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d"
 
 # ---------------------------
+# PATH RESOLUTION
+# ---------------------------
+
+# Project root is parent of src/ directory where this script lives
+$script:ProjectRoot = Split-Path $PSScriptRoot -Parent
+
+# ---------------------------
 # PROFILE RESOLUTION
 # ---------------------------
 if ($ConfigProfile) {
-    $envFile = Join-Path $PSScriptRoot ".env.$ConfigProfile"
+    $envFile = Join-Path $script:ProjectRoot ".env.$ConfigProfile"
     $profileDisplay = "[$ConfigProfile]"
 } else {
-    $envFile = Join-Path $PSScriptRoot ".env"
+    $envFile = Join-Path $script:ProjectRoot ".env"
     $profileDisplay = "[default]"
 }
 

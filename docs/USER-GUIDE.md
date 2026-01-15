@@ -60,7 +60,7 @@ cd outlook-rules-manager
 Run the prerequisite installer:
 
 ```powershell
-.\Install-Prerequisites.ps1
+.\src\Install-Prerequisites.ps1
 ```
 
 This installs:
@@ -97,7 +97,7 @@ You need an Azure AD application to authenticate. Choose one of these methods:
 ### Option A: Automated Registration (Recommended)
 
 ```powershell
-.\Register-OutlookRulesApp.ps1
+.\src\Register-OutlookRulesApp.ps1
 ```
 
 This script:
@@ -378,7 +378,7 @@ Use `@` to reference other configuration sections:
 ### Connect to Services
 
 ```powershell
-.\Connect-OutlookRulesApp.ps1
+.\src\Connect-OutlookRulesApp.ps1
 ```
 
 This script:
@@ -401,7 +401,7 @@ This script:
 If your app has the native client redirect URI configured:
 
 ```powershell
-.\Connect-OutlookRulesApp.ps1 -Interactive
+.\src\Connect-OutlookRulesApp.ps1 -Interactive
 ```
 
 ### Verify Connection
@@ -451,43 +451,43 @@ Get-InboxRule
 
 ```powershell
 # Review what will change
-.\Manage-OutlookRules.ps1 -Operation Compare
+.\src\Manage-OutlookRules.ps1 -Operation Compare
 
 # Deploy changes
-.\Manage-OutlookRules.ps1 -Operation Deploy
+.\src\Manage-OutlookRules.ps1 -Operation Deploy
 
 # Verify deployment
-.\Manage-OutlookRules.ps1 -Operation List
+.\src\Manage-OutlookRules.ps1 -Operation List
 ```
 
 #### Backup and Restore
 
 ```powershell
 # Create backup
-.\Manage-OutlookRules.ps1 -Operation Backup
+.\src\Manage-OutlookRules.ps1 -Operation Backup
 # Creates: ./backups/rules-YYYY-MM-DD_HHMMSS.json
 
 # Restore from backup
-.\Manage-OutlookRules.ps1 -Operation Import -ExportPath ".\backups\rules-2024-01-15_143022.json"
+.\src\Manage-OutlookRules.ps1 -Operation Import -ExportPath ".\backups\rules-2024-01-15_143022.json"
 ```
 
 #### Temporarily Disable Rules
 
 ```powershell
 # Disable all rules for debugging
-.\Manage-OutlookRules.ps1 -Operation DisableAll
+.\src\Manage-OutlookRules.ps1 -Operation DisableAll
 
 # Test email flow...
 
 # Re-enable all rules
-.\Manage-OutlookRules.ps1 -Operation EnableAll
+.\src\Manage-OutlookRules.ps1 -Operation EnableAll
 ```
 
 #### Sync Deployed Rules to Config
 
 ```powershell
 # Pull current rules into config file
-.\Manage-OutlookRules.ps1 -Operation Pull
+.\src\Manage-OutlookRules.ps1 -Operation Pull
 ```
 
 ---
@@ -500,64 +500,64 @@ Beyond inbox rules, the tool provides management of additional mailbox settings.
 
 ```powershell
 # View current Out-of-Office settings
-.\Manage-OutlookRules.ps1 -Operation OutOfOffice
+.\src\Manage-OutlookRules.ps1 -Operation OutOfOffice
 
 # Enable Out-of-Office with a message
-.\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
+.\src\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
     -OOOInternal "I'm away from the office until Monday."
 
 # Enable with different internal/external messages
-.\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
+.\src\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
     -OOOInternal "I'm away - contact my team for urgent matters." `
     -OOOExternal "Thank you for your email. I'm currently out of office."
 
 # Schedule Out-of-Office for specific dates
-.\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
+.\src\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $true `
     -OOOStartDate "2024-12-23" -OOOEndDate "2024-12-27" `
     -OOOInternal "Away for the holidays. Back on the 27th."
 
 # Disable Out-of-Office
-.\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $false
+.\src\Manage-OutlookRules.ps1 -Operation OutOfOffice -OOOEnabled $false
 ```
 
 ### Email Forwarding
 
 ```powershell
 # View current forwarding settings
-.\Manage-OutlookRules.ps1 -Operation Forwarding
+.\src\Manage-OutlookRules.ps1 -Operation Forwarding
 
 # Enable forwarding to another address (keep copy in mailbox)
-.\Manage-OutlookRules.ps1 -Operation Forwarding `
+.\src\Manage-OutlookRules.ps1 -Operation Forwarding `
     -ForwardingAddress "backup@company.com" `
     -ForwardingEnabled $true `
     -DeliverToMailbox $true
 
 # Enable forwarding without keeping a local copy
-.\Manage-OutlookRules.ps1 -Operation Forwarding `
+.\src\Manage-OutlookRules.ps1 -Operation Forwarding `
     -ForwardingAddress "delegate@company.com" `
     -ForwardingEnabled $true `
     -DeliverToMailbox $false
 
 # Disable forwarding
-.\Manage-OutlookRules.ps1 -Operation Forwarding -ForwardingEnabled $false
+.\src\Manage-OutlookRules.ps1 -Operation Forwarding -ForwardingEnabled $false
 ```
 
 ### Junk Mail Settings
 
 ```powershell
 # View junk mail settings (safe/blocked senders)
-.\Manage-OutlookRules.ps1 -Operation JunkMail
+.\src\Manage-OutlookRules.ps1 -Operation JunkMail
 
 # Add safe senders (emails from these won't go to junk)
-.\Manage-OutlookRules.ps1 -Operation JunkMail `
+.\src\Manage-OutlookRules.ps1 -Operation JunkMail `
     -SafeSenders "trusted@partner.com","notifications@service.com"
 
 # Add blocked senders (emails go directly to junk)
-.\Manage-OutlookRules.ps1 -Operation JunkMail `
+.\src\Manage-OutlookRules.ps1 -Operation JunkMail `
     -BlockedSenders "spam@example.com","unwanted@domain.com"
 
 # Add safe recipients (your sent emails to these addresses are trusted)
-.\Manage-OutlookRules.ps1 -Operation JunkMail `
+.\src\Manage-OutlookRules.ps1 -Operation JunkMail `
     -SafeRecipients "team@company.com"
 ```
 
@@ -597,18 +597,18 @@ Manage multiple email accounts (personal + work) using configuration profiles.
 
 ```powershell
 # Connect to personal account
-.\Connect-OutlookRulesApp.ps1 -ConfigProfile personal
+.\src\Connect-OutlookRulesApp.ps1 -ConfigProfile personal
 
 # Manage personal email rules
-.\Manage-OutlookRules.ps1 -Operation List -ConfigProfile personal
-.\Manage-OutlookRules.ps1 -Operation Deploy -ConfigProfile personal
+.\src\Manage-OutlookRules.ps1 -Operation List -ConfigProfile personal
+.\src\Manage-OutlookRules.ps1 -Operation Deploy -ConfigProfile personal
 
 # Connect to work account
-.\Connect-OutlookRulesApp.ps1 -ConfigProfile work
+.\src\Connect-OutlookRulesApp.ps1 -ConfigProfile work
 
 # Manage work email rules
-.\Manage-OutlookRules.ps1 -Operation List -ConfigProfile work
-.\Manage-OutlookRules.ps1 -Operation Deploy -ConfigProfile work
+.\src\Manage-OutlookRules.ps1 -Operation List -ConfigProfile work
+.\src\Manage-OutlookRules.ps1 -Operation Deploy -ConfigProfile work
 ```
 
 ### Profile Files
@@ -729,34 +729,34 @@ Manage multiple email accounts (personal + work) using configuration profiles.
 
 ```powershell
 # 1. Install modules
-.\Install-Prerequisites.ps1
+.\src\Install-Prerequisites.ps1
 
 # 2. Register app (one-time)
-.\Register-OutlookRulesApp.ps1
+.\src\Register-OutlookRulesApp.ps1
 
 # 3. Create your configuration
 Copy-Item examples/rules-config.example.json rules-config.json
 # Edit rules-config.json with your senders and preferences
 
 # 4. Connect and deploy
-.\Connect-OutlookRulesApp.ps1
-.\Manage-OutlookRules.ps1 -Operation Deploy
+.\src\Connect-OutlookRulesApp.ps1
+.\src\Manage-OutlookRules.ps1 -Operation Deploy
 ```
 
 ### Daily Operations
 
 ```powershell
 # Connect (if session expired)
-.\Connect-OutlookRulesApp.ps1
+.\src\Connect-OutlookRulesApp.ps1
 
 # Check current state
-.\Manage-OutlookRules.ps1 -Operation List
+.\src\Manage-OutlookRules.ps1 -Operation List
 
 # Make changes to rules-config.json...
 
 # Preview and deploy
-.\Manage-OutlookRules.ps1 -Operation Compare
-.\Manage-OutlookRules.ps1 -Operation Deploy
+.\src\Manage-OutlookRules.ps1 -Operation Compare
+.\src\Manage-OutlookRules.ps1 -Operation Deploy
 ```
 
 ### Adding a New Priority Sender
@@ -777,7 +777,7 @@ Copy-Item examples/rules-config.example.json rules-config.json
 2. Deploy the change:
 
    ```powershell
-   .\Manage-OutlookRules.ps1 -Operation Deploy
+   .\src\Manage-OutlookRules.ps1 -Operation Deploy
    ```
 
 ### Adding a New Rule
@@ -811,8 +811,8 @@ Copy-Item examples/rules-config.example.json rules-config.json
 3. Deploy:
 
    ```powershell
-   .\Manage-OutlookRules.ps1 -Operation Compare
-   .\Manage-OutlookRules.ps1 -Operation Deploy
+   .\src\Manage-OutlookRules.ps1 -Operation Compare
+   .\src\Manage-OutlookRules.ps1 -Operation Deploy
    ```
 
 ---
@@ -835,14 +835,14 @@ The `stopProcessingRules: true` action prevents subsequent rules from running. U
 ### Backup Before Major Changes
 
 ```powershell
-.\Manage-OutlookRules.ps1 -Operation Backup
+.\src\Manage-OutlookRules.ps1 -Operation Backup
 # Then make your changes
 ```
 
 ### Validate Configuration
 
 ```powershell
-.\Manage-OutlookRules.ps1 -Operation Validate
+.\src\Manage-OutlookRules.ps1 -Operation Validate
 ```
 
 ### Security Checklist

@@ -22,31 +22,36 @@ PowerShell-based automation for managing Outlook inbox organization via Microsof
 
 ```powershell
 # 1. Install required modules
-.\Install-Prerequisites.ps1
+.\src\Install-Prerequisites.ps1
 
 # 2. Register Azure AD app (one-time)
-.\Register-OutlookRulesApp.ps1
+.\src\Register-OutlookRulesApp.ps1
 
 # 3. Connect to services
-.\Connect-OutlookRulesApp.ps1
+.\src\Connect-OutlookRulesApp.ps1
 
 # 4. Deploy rules
-.\Manage-OutlookRules.ps1 -Operation Deploy
+.\src\Manage-OutlookRules.ps1 -Operation Deploy
 ```
 
 ## Repository Structure
 
 ```
 outlook-rules-manager/
-├── .github/workflows/          # CI/CD and security scanning
+├── src/                        # Core PowerShell scripts
+│   ├── Manage-OutlookRules.ps1     # Main management CLI
+│   ├── Manage-AppAuthorization.ps1 # Authorization management
+│   ├── Connect-OutlookRulesApp.ps1 # Authentication helper
+│   ├── Register-OutlookRulesApp.ps1# Azure AD app registration
+│   ├── Install-Prerequisites.ps1   # Module installation
+│   └── modules/
+│       └── SecurityHelpers.psm1    # Security module
+├── scripts/                    # Utility scripts
+│   └── Check-BeforeCommit.ps1      # Pre-commit security check
+├── tests/                      # Pester tests
 ├── docs/                       # Documentation
 ├── examples/                   # Example configuration files
-├── scripts/                    # Utility scripts
-├── Install-Prerequisites.ps1   # Module installation
-├── Register-OutlookRulesApp.ps1# Azure AD app registration
-├── Connect-OutlookRulesApp.ps1 # Authentication helper
-├── Setup-OutlookRules.ps1      # One-shot setup (legacy)
-├── Manage-OutlookRules.ps1     # Full management CLI
+├── .env                        # Azure AD config (gitignored)
 └── rules-config.json           # Rule definitions (gitignored)
 ```
 
@@ -54,31 +59,32 @@ outlook-rules-manager/
 
 | Script | Purpose |
 |--------|---------|
-| `Install-Prerequisites.ps1` | Installs required PowerShell modules |
-| `Register-OutlookRulesApp.ps1` | Creates Azure AD app registration |
-| `Connect-OutlookRulesApp.ps1` | Authenticates to Graph and Exchange Online |
-| `Manage-OutlookRules.ps1` | Full rules management CLI |
+| `src/Install-Prerequisites.ps1` | Installs required PowerShell modules |
+| `src/Register-OutlookRulesApp.ps1` | Creates Azure AD app registration |
+| `src/Connect-OutlookRulesApp.ps1` | Authenticates to Graph and Exchange Online |
+| `src/Manage-OutlookRules.ps1` | Full rules management CLI |
+| `src/Manage-AppAuthorization.ps1` | User authorization management |
 
 ## Management Operations
 
 ```powershell
 # List all rules
-.\Manage-OutlookRules.ps1 -Operation List
+.\src\Manage-OutlookRules.ps1 -Operation List
 
 # Compare config vs deployed
-.\Manage-OutlookRules.ps1 -Operation Compare
+.\src\Manage-OutlookRules.ps1 -Operation Compare
 
 # Deploy from config
-.\Manage-OutlookRules.ps1 -Operation Deploy
+.\src\Manage-OutlookRules.ps1 -Operation Deploy
 
 # Create backup
-.\Manage-OutlookRules.ps1 -Operation Backup
+.\src\Manage-OutlookRules.ps1 -Operation Backup
 
 # Show mailbox stats
-.\Manage-OutlookRules.ps1 -Operation Stats
+.\src\Manage-OutlookRules.ps1 -Operation Stats
 ```
 
-All operations: `List`, `Show`, `Export`, `Backup`, `Import`, `Compare`, `Deploy`, `Pull`, `Enable`, `Disable`, `EnableAll`, `DisableAll`, `Delete`, `DeleteAll`, `Folders`, `Stats`, `Validate`, `Categories`
+All operations: `List`, `Show`, `Export`, `Backup`, `Import`, `Compare`, `Deploy`, `Pull`, `Enable`, `Disable`, `EnableAll`, `DisableAll`, `Delete`, `DeleteAll`, `Folders`, `Stats`, `Validate`, `Categories`, `AuditLog`
 
 ## Configuration
 
@@ -112,6 +118,7 @@ Edit the file to customize:
 
 See the [docs/](docs/) folder for detailed documentation:
 
+- [Quick Start](docs/QUICKSTART.md) - Get running in 5 minutes
 - [User Guide](docs/USER-GUIDE.md) - Implementation, configuration, and usage
 - [Testing Guide](docs/TESTING-GUIDE.md) - Demo environment setup and validation
 - [SDL Compliance](docs/SDL.md) - Security development lifecycle documentation

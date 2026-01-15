@@ -8,6 +8,7 @@ Welcome to the Outlook Rules Manager documentation. This folder contains compreh
 
 | Document | Description |
 |----------|-------------|
+| [Quick Start](QUICKSTART.md) | Get running in 5 minutes - essential setup and common operations |
 | [User Guide](USER-GUIDE.md) | Complete implementation guide covering installation, configuration, and daily usage |
 | [Testing Guide](TESTING-GUIDE.md) | Demo environment setup, validation procedures, and troubleshooting |
 
@@ -31,29 +32,29 @@ Welcome to the Outlook Rules Manager documentation. This folder contains compreh
 
 ```powershell
 # Install prerequisites
-.\Install-Prerequisites.ps1
+.\src\Install-Prerequisites.ps1
 
 # Register Azure AD app
-.\Register-OutlookRulesApp.ps1
+.\src\Register-OutlookRulesApp.ps1
 
 # Connect to services
-.\Connect-OutlookRulesApp.ps1
+.\src\Connect-OutlookRulesApp.ps1
 ```
 
 ### Common Operations
 
 ```powershell
 # Deploy rules from config
-.\Manage-OutlookRules.ps1 -Operation Deploy
+.\src\Manage-OutlookRules.ps1 -Operation Deploy
 
 # List current rules
-.\Manage-OutlookRules.ps1 -Operation List
+.\src\Manage-OutlookRules.ps1 -Operation List
 
 # Create backup
-.\Manage-OutlookRules.ps1 -Operation Backup
+.\src\Manage-OutlookRules.ps1 -Operation Backup
 
 # Validate rules
-.\Manage-OutlookRules.ps1 -Operation Validate
+.\src\Manage-OutlookRules.ps1 -Operation Validate
 ```
 
 ### Configuration Files

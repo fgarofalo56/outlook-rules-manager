@@ -258,9 +258,9 @@ This tool aligns with Zero Trust principles:
 
 ### Initial Setup Security
 
-- [ ] Run `.\Register-OutlookRulesApp.ps1` to create app with app roles
+- [ ] Run `.\src\Register-OutlookRulesApp.ps1` to create app with app roles
 - [ ] Enable "User Assignment Required" in Enterprise Applications
-- [ ] Run `.\Manage-AppAuthorization.ps1 -Operation Setup` to configure authorization
+- [ ] Run `.\src\Manage-AppAuthorization.ps1 -Operation Setup` to configure authorization
 - [ ] Verify only authorized users are assigned app roles
 
 ### Pre-Commit Security
@@ -276,11 +276,11 @@ This tool aligns with Zero Trust principles:
 - [ ] Use example.com addresses in any shared configurations
 - [ ] Review rule conditions before deploying (especially ForwardTo/RedirectTo)
 - [ ] Protect configuration files with appropriate file permissions
-- [ ] Verify authorization status: `.\Manage-AppAuthorization.ps1 -Operation Status`
+- [ ] Verify authorization status: `.\src\Manage-AppAuthorization.ps1 -Operation Status`
 
 ### Ongoing Security
 
-- [ ] Periodically review authorized users: `.\Manage-AppAuthorization.ps1 -Operation List`
+- [ ] Periodically review authorized users: `.\src\Manage-AppAuthorization.ps1 -Operation List`
 - [ ] Remove unused user assignments
 - [ ] Monitor Azure AD audit logs for role assignment changes
 - [ ] Review forwarding rules for potential data exfiltration

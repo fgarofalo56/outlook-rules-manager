@@ -88,28 +88,33 @@ git check-ignore -v .env rules-config.json
 
 ```
 outlook-rules-manager/
-├── .github/
-│   └── workflows/                 # CI/CD and security scanning
-│       ├── msdo-scan.yml
-│       └── security-scan.yml
+├── src/                           # Core PowerShell scripts
+│   ├── Manage-OutlookRules.ps1        # Full management CLI
+│   ├── Manage-AppAuthorization.ps1    # User authorization management
+│   ├── Connect-OutlookRulesApp.ps1    # Authentication + authorization validation
+│   ├── Register-OutlookRulesApp.ps1   # Azure AD app registration (with app roles)
+│   ├── Install-Prerequisites.ps1      # Module installation script
+│   ├── Setup-OutlookRules.ps1         # One-shot rules/folders creation (legacy)
+│   └── modules/
+│       └── SecurityHelpers.psm1       # Security helper module
+├── scripts/                       # Utility scripts
+│   └── Check-BeforeCommit.ps1         # Pre-commit security check
+├── tests/                         # Pester unit tests
+│   ├── SecurityHelpers.Tests.ps1
+│   ├── ConfigParsing.Tests.ps1
+│   └── Run-Tests.ps1
 ├── docs/                          # Documentation
-│   ├── rules-cheatsheet.md
+│   ├── QUICKSTART.md
 │   ├── USER-GUIDE.md
+│   ├── TESTING-GUIDE.md
 │   ├── SECURITY.md
 │   ├── SDL.md
-│   └── SECURITY-QUESTIONNAIRE.md
+│   ├── SECURITY-QUESTIONNAIRE.md
+│   └── rules-cheatsheet.md
 ├── examples/                      # Example configuration files
 │   ├── .env.example
 │   └── rules-config.example.json
-├── scripts/                       # Utility scripts
-│   ├── Check-BeforeCommit.ps1
-│   └── SecurityHelpers.psm1
-├── Install-Prerequisites.ps1      # Module installation script
-├── Register-OutlookRulesApp.ps1   # Azure AD app registration (with app roles)
-├── Connect-OutlookRulesApp.ps1    # Authentication + authorization validation
-├── Manage-AppAuthorization.ps1    # User authorization management
-├── Setup-OutlookRules.ps1         # One-shot rules/folders creation
-├── Manage-OutlookRules.ps1        # Full management CLI
+├── .github/workflows/             # CI/CD and security scanning
 ├── rules-config.json              # Declarative rule definitions (gitignored)
 ├── .env                           # Azure AD credentials (gitignored)
 ├── .gitignore                     # Protects sensitive files
@@ -124,9 +129,9 @@ outlook-rules-manager/
 | File | Purpose | When to Modify |
 |------|---------|----------------|
 | `rules-config.json` | All rule definitions | Adding/changing rules |
-| `Manage-OutlookRules.ps1` | Management operations | Adding new operations |
-| `Manage-AppAuthorization.ps1` | User authorization | Adding/removing users |
-| `Setup-OutlookRules.ps1` | Legacy one-shot setup | Rarely - use config instead |
+| `src/Manage-OutlookRules.ps1` | Management operations | Adding new operations |
+| `src/Manage-AppAuthorization.ps1` | User authorization | Adding/removing users |
+| `src/modules/SecurityHelpers.psm1` | Security validation | Adding security functions |
 
 ## Key APIs & Modules
 
@@ -160,7 +165,7 @@ Edit `rules-config.json` > `senderLists.priority.addresses`:
   "new.sender@email.com"
 ]
 ```
-Then: `.\Manage-OutlookRules.ps1 -Operation Deploy`
+Then: `.\src\Manage-OutlookRules.ps1 -Operation Deploy`
 
 ### Add new keywords
 Edit `rules-config.json` > `keywordLists.<list>.keywords`:
@@ -173,8 +178,8 @@ Edit `rules-config.json` > `keywordLists.<list>.keywords`:
 ### Add a new rule
 1. Add folder to `folders` array (if needed)
 2. Add rule to `rules` array with unique id, name, priority
-3. Run: `.\Manage-OutlookRules.ps1 -Operation Compare` (review)
-4. Run: `.\Manage-OutlookRules.ps1 -Operation Deploy` (apply)
+3. Run: `.\src\Manage-OutlookRules.ps1 -Operation Compare` (review)
+4. Run: `.\src\Manage-OutlookRules.ps1 -Operation Deploy` (apply)
 
 ### Change noise handling
 Edit `rules-config.json` > `settings.noiseAction`:
@@ -185,10 +190,10 @@ Edit `rules-config.json` > `settings.noiseAction`:
 ### Backup current rules
 ```powershell
 # Automatic timestamped backup
-.\Manage-OutlookRules.ps1 -Operation Backup
+.\src\Manage-OutlookRules.ps1 -Operation Backup
 
 # Or export to specific path
-.\Manage-OutlookRules.ps1 -Operation Export -ExportPath ".\my-rules-backup.json"
+.\src\Manage-OutlookRules.ps1 -Operation Export -ExportPath ".\my-rules-backup.json"
 ```
 
 ## Management Operations Reference
@@ -228,7 +233,8 @@ Edit `rules-config.json` > `settings.noiseAction`:
 | Operation | Command | Description |
 |-----------|---------|-------------|
 | Validate | `-Operation Validate` | Check rules for potential issues |
-| Categories | `-Operation Categories` | List categories used in rules |
+| Categories | `-Operation Categories` | Show category overview, sync status, and management guide |
+| AuditLog | `-Operation AuditLog` | View audit logs (use with -EnableAuditLog on other ops) |
 
 ## rules-config.json Structure
 
@@ -263,13 +269,13 @@ Get-MgContext | Select-Object Account, Scopes
 Get-ConnectionInformation
 
 # Quick rule check
-.\Manage-OutlookRules.ps1 -Operation List
+.\src\Manage-OutlookRules.ps1 -Operation List
 
 # Full rule details
-.\Manage-OutlookRules.ps1 -Operation Show -RuleName "01 - Priority Senders"
+.\src\Manage-OutlookRules.ps1 -Operation Show -RuleName "01 - Priority Senders"
 
 # Compare before deploy
-.\Manage-OutlookRules.ps1 -Operation Compare
+.\src\Manage-OutlookRules.ps1 -Operation Compare
 ```
 
 ## Error Handling Notes
@@ -289,61 +295,61 @@ Get-ConnectionInformation
 
 ### Initial Setup
 ```powershell
-.\Install-Prerequisites.ps1             # Install modules
-.\Register-OutlookRulesApp.ps1          # Create Azure AD app
-.\Connect-OutlookRulesApp.ps1           # Authenticate
-.\Manage-OutlookRules.ps1 -Operation Deploy  # Deploy rules
+.\src\Install-Prerequisites.ps1             # Install modules
+.\src\Register-OutlookRulesApp.ps1          # Create Azure AD app
+.\src\Connect-OutlookRulesApp.ps1           # Authenticate
+.\src\Manage-OutlookRules.ps1 -Operation Deploy  # Deploy rules
 ```
 
 ### Ongoing Management
 ```powershell
-.\Connect-OutlookRulesApp.ps1           # If session expired
+.\src\Connect-OutlookRulesApp.ps1           # If session expired
 # Edit rules-config.json
-.\Manage-OutlookRules.ps1 -Operation Compare  # Review changes
-.\Manage-OutlookRules.ps1 -Operation Deploy   # Apply changes
+.\src\Manage-OutlookRules.ps1 -Operation Compare  # Review changes
+.\src\Manage-OutlookRules.ps1 -Operation Deploy   # Apply changes
 ```
 
 ### Backup/Restore
 ```powershell
 # Create timestamped backup
-.\Manage-OutlookRules.ps1 -Operation Backup
+.\src\Manage-OutlookRules.ps1 -Operation Backup
 # Creates: ./backups/rules-YYYY-MM-DD_HHMMSS.json
 
 # Restore from backup
-.\Manage-OutlookRules.ps1 -Operation Import -ExportPath ".\backups\rules-2024-01-15_143022.json"
+.\src\Manage-OutlookRules.ps1 -Operation Import -ExportPath ".\backups\rules-2024-01-15_143022.json"
 ```
 
 ### Troubleshooting
 ```powershell
 # Check mailbox statistics
-.\Manage-OutlookRules.ps1 -Operation Stats
+.\src\Manage-OutlookRules.ps1 -Operation Stats
 
 # Validate rules for issues
-.\Manage-OutlookRules.ps1 -Operation Validate
+.\src\Manage-OutlookRules.ps1 -Operation Validate
 
 # Pull deployed rules to sync config file
-.\Manage-OutlookRules.ps1 -Operation Pull
+.\src\Manage-OutlookRules.ps1 -Operation Pull
 
 # Disable all rules temporarily (for debugging)
-.\Manage-OutlookRules.ps1 -Operation DisableAll
+.\src\Manage-OutlookRules.ps1 -Operation DisableAll
 
 # Re-enable all rules
-.\Manage-OutlookRules.ps1 -Operation EnableAll
+.\src\Manage-OutlookRules.ps1 -Operation EnableAll
 ```
 
 ### Multi-Account Management
 ```powershell
 # Connect to personal email account
-.\Connect-OutlookRulesApp.ps1 -ConfigProfile personal
+.\src\Connect-OutlookRulesApp.ps1 -ConfigProfile personal
 
 # Deploy rules to personal account
-.\Manage-OutlookRules.ps1 -Operation Deploy -ConfigProfile personal
+.\src\Manage-OutlookRules.ps1 -Operation Deploy -ConfigProfile personal
 
 # Connect to work email account
-.\Connect-OutlookRulesApp.ps1 -ConfigProfile work
+.\src\Connect-OutlookRulesApp.ps1 -ConfigProfile work
 
 # List rules on work account
-.\Manage-OutlookRules.ps1 -Operation List -ConfigProfile work
+.\src\Manage-OutlookRules.ps1 -Operation List -ConfigProfile work
 ```
 
 Profile files:

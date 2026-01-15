@@ -17,3 +17,11 @@ ad6f6f7bd2825d14fa6ac8f02bd1f92ee5343d61:Manage-OutlookRules.ps1:email-address:1
 6a1baebc2c4a68074953cb6914b36d5f4840ad61:Manage-AppAuthorization.ps1:email-address:48
 6a1baebc2c4a68074953cb6914b36d5f4840ad61:Manage-AppAuthorization.ps1:email-address:52
 6a1baebc2c4a68074953cb6914b36d5f4840ad61:Manage-AppAuthorization.ps1:email-address:56
+
+# ConfigParsing.Tests.ps1 - Test data with example tenant IDs and emails (RFC 2606 reserved domains)
+ed07e56bd5e40b57640757c111296a6d3b474f45:tests/ConfigParsing.Tests.ps1:azure-tenant-id:62
+ed07e56bd5e40b57640757c111296a6d3b474f45:tests/ConfigParsing.Tests.ps1:azure-tenant-id:84
+ed07e56bd5e40b57640757c111296a6d3b474f45:tests/ConfigParsing.Tests.ps1:azure-tenant-id:105
+ed07e56bd5e40b57640757c111296a6d3b474f45:tests/ConfigParsing.Tests.ps1:azure-tenant-id:128
+ed07e56bd5e40b57640757c111296a6d3b474f45:tests/ConfigParsing.Tests.ps1:azure-tenant-id:152
+ed07e56bd5e40b57640757c111296a6d3b474f45:tests/ConfigParsing.Tests.ps1:email-address:200

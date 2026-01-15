@@ -54,18 +54,26 @@ if (-not $Interactive) {
 }
 
 # ---------------------------
+# PATH RESOLUTION
+# ---------------------------
+
+# Project root is parent of src/ directory where this script lives
+$ProjectRoot = Split-Path $PSScriptRoot -Parent
+
+# ---------------------------
 # CONFIGURATION
 # Load from .env.{profile} (if profile specified), .env (primary), or app-config.json (fallback)
+# Config files are stored at project root for easy access
 # ---------------------------
 
 # Determine which env file to load based on profile
 if ($ConfigProfile) {
-    $envFile = Join-Path $PSScriptRoot ".env.$ConfigProfile"
-    $configFile = Join-Path $PSScriptRoot "app-config.$ConfigProfile.json"
+    $envFile = Join-Path $ProjectRoot ".env.$ConfigProfile"
+    $configFile = Join-Path $ProjectRoot "app-config.$ConfigProfile.json"
     $profileDisplay = "[$ConfigProfile]"
 } else {
-    $envFile = Join-Path $PSScriptRoot ".env"
-    $configFile = Join-Path $PSScriptRoot "app-config.json"
+    $envFile = Join-Path $ProjectRoot ".env"
+    $configFile = Join-Path $ProjectRoot "app-config.json"
     $profileDisplay = "[default]"
 }
 
