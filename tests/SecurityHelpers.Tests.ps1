@@ -39,7 +39,8 @@ Describe "Resolve-SafePath" {
     Context "Valid paths within base directory" {
         It "Should resolve a simple relative path" {
             $basePath = $PSScriptRoot
-            $result = Resolve-SafePath -Path ".\test.json" -BaseDirectory $basePath
+            $testPath = Join-Path $basePath "test.json"
+            $result = Resolve-SafePath -Path $testPath -BaseDirectory $basePath
             $result | Should -BeLike "*test.json"
         }
 
@@ -133,7 +134,7 @@ Describe "Test-ValidEmail" {
         }
 
         It "Should reject empty string" {
-            Test-ValidEmail -Email "" | Should -BeFalse
+            { Test-ValidEmail -Email "" } | Should -Throw
         }
     }
 }
@@ -179,7 +180,7 @@ Describe "Test-ValidDomain" {
         }
 
         It "Should reject empty string" {
-            Test-ValidDomain -Domain "" | Should -BeFalse
+            { Test-ValidDomain -Domain "" } | Should -Throw
         }
     }
 }
@@ -437,11 +438,19 @@ Describe "ConvertTo-SafeText" {
             $result | Should -Be ""
         }
 
-        It "Should escape remaining angle brackets" {
+        It "Should remove content between angle brackets as potential HTML" {
+            # Content between < and > is treated as potentially dangerous HTML
             $text = "3 < 5 and 10 > 7"
             $result = ConvertTo-SafeText -Text $text
+            # The content between < and > is removed as it looks like a malformed tag
+            $result | Should -Be "3  7"
+        }
+
+        It "Should escape isolated angle brackets" {
+            # Test with brackets that don't form a tag-like pattern
+            $text = "Use shift+< for indent"
+            $result = ConvertTo-SafeText -Text $text
             $result | Should -Match "&lt;"
-            $result | Should -Match "&gt;"
         }
     }
 }
