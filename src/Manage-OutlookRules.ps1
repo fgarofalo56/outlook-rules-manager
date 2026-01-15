@@ -1749,6 +1749,10 @@ function Invoke-AuditLogOperation {
 
     # Retrieve logs
     try {
+        if (-not (Get-Command 'Get-AuditLogs' -ErrorAction SilentlyContinue)) {
+            Write-Host "Error: Get-AuditLogs function not available. SecurityHelpers module may not be loaded correctly." -ForegroundColor Red
+            return
+        }
         $logs = Get-AuditLogs -StartDate $startDate -EndDate $endDate -Operation $FilterOperation -LogDirectory $logDir
     } catch {
         Write-Host "Error reading logs: $($_.Exception.Message)" -ForegroundColor Red
@@ -1846,13 +1850,13 @@ function Invoke-AuditLogOperation {
     Write-Host "`n--- Usage ---" -ForegroundColor Yellow
     Write-Host @"
   Enable audit logging for operations:
-    .\Manage-OutlookRules.ps1 -Operation Deploy -EnableAuditLog
+    .\src\Manage-OutlookRules.ps1 -Operation Deploy -EnableAuditLog
 
   View logs (default: 7 days):
-    .\Manage-OutlookRules.ps1 -Operation AuditLog
+    .\src\Manage-OutlookRules.ps1 -Operation AuditLog
 
   Clear old logs (>30 days):
-    .\Manage-OutlookRules.ps1 -Operation AuditLog -Force
+    .\src\Manage-OutlookRules.ps1 -Operation AuditLog -Force
 
 "@ -ForegroundColor Gray
 }

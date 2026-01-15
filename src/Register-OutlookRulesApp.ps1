@@ -283,6 +283,13 @@ Write-Host $configOutput -ForegroundColor White
 # Project root is parent of src/ directory where this script lives
 $ProjectRoot = Split-Path $PSScriptRoot -Parent
 
+# Validate project root exists and has expected structure
+if (-not (Test-Path $ProjectRoot)) {
+    Write-Warning "Could not determine project root directory. Configuration files may be saved to unexpected locations."
+} elseif (-not (Test-Path (Join-Path $ProjectRoot "src"))) {
+    Write-Warning "Project structure validation: 'src' folder not found at expected location. Verify script is in correct directory."
+}
+
 # Save to .env file at project root (primary config)
 $envFile = Join-Path $ProjectRoot ".env"
 $envContent = @"

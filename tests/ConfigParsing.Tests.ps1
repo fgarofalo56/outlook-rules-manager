@@ -29,9 +29,11 @@ BeforeAll {
             $path = $Value.Substring(1).Split(".")
             $resolved = $Config
             foreach ($segment in $path) {
+                if ($null -eq $resolved) { return $null }
                 $resolved = $resolved.$segment
             }
 
+            if ($null -eq $resolved) { return $null }
             if ($resolved.addresses) { return $resolved.addresses }
             if ($resolved.domains) { return $resolved.domains }
             if ($resolved.keywords) { return $resolved.keywords }
@@ -262,6 +264,22 @@ Describe "Reference Resolution" {
 
             $result = Resolve-ConfigReferences -Config $config -Value "@senderLists.noise"
             $result | Should -Contain "newsletter.example.com"
+            $result | Should -Contain "*.marketing.com"
+            $result.Count | Should -Be 2
+        }
+
+        It "Should handle wildcard domain patterns" {
+            $config = [PSCustomObject]@{
+                senderLists = [PSCustomObject]@{
+                    blocked = [PSCustomObject]@{
+                        domains = @("*.spam.com", "*.newsletter.net", "marketing.example.org")
+                    }
+                }
+            }
+
+            $result = Resolve-ConfigReferences -Config $config -Value "@senderLists.blocked"
+            $result.Count | Should -Be 3
+            ($result | Where-Object { $_ -like '`**' }).Count | Should -Be 2
         }
     }
 
