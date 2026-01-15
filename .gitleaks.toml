@@ -100,6 +100,7 @@ paths = [
     '''\.md$''',  # Documentation files
     '''\.github/.*\.yml$''',  # GitHub workflows (contain example patterns)
     '''examples/.*''',  # Example files directory
+    '''tests/.*\.ps1$''',  # Test files (contain example/mock data)
 ]
 regexes = [
     # RFC 2606 reserved example domains

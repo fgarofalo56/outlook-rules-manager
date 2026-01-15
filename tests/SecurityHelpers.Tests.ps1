@@ -497,8 +497,9 @@ Describe "Protect-SensitiveLogData" {
 Describe "Test-SensitiveData" {
     Context "Email domain detection" {
         It "Should detect blocked email domains" {
-            $content = "Forward to user@microsoft.com"
-            $result = Test-SensitiveData -Content $content
+            # Use custom blocked domain to avoid CI false positives
+            $content = "Forward to user@blocked-test.local"
+            $result = Test-SensitiveData -Content $content -BlockedDomains @('blocked-test.local')
             $result.HasSensitiveData | Should -BeTrue
             $result.Findings.Type | Should -Contain "BlockedEmailDomain"
         }
