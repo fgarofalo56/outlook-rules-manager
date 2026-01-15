@@ -32,6 +32,8 @@ This installs:
 
 ## Step 2: Register Azure AD App (2 min)
 
+### Option A: Create New App Registration (Recommended)
+
 ```powershell
 # Run the registration script
 .\src\Register-OutlookRulesApp.ps1
@@ -43,6 +45,25 @@ This creates an Azure AD app registration with:
 - App roles for access control
 
 **Output**: Creates `.env` file with ClientId and TenantId.
+
+### Option B: Use Existing App Registration
+
+If you cannot create new app registrations (IT restrictions, existing app available):
+
+```powershell
+# Validate and configure an existing app
+.\src\Register-OutlookRulesApp.ps1 -UseExisting -ClientId "your-client-id" -TenantId "your-tenant-id"
+
+# Or with auto-fix for common issues
+.\src\Register-OutlookRulesApp.ps1 -UseExisting -ClientId "your-client-id" -TenantId "your-tenant-id" -AutoFix
+```
+
+**Requirements for existing apps:**
+- Public client flow enabled
+- Delegated permissions: `Mail.ReadWrite`, `User.Read`
+- Redirect URI: `https://login.microsoftonline.com/common/oauth2/nativeclient`
+
+See [EXISTING-APP-SETUP.md](EXISTING-APP-SETUP.md) for detailed instructions.
 
 ---
 
@@ -192,6 +213,23 @@ Copy-Item rules-config.json rules-config.work.json
 .\src\Connect-OutlookRulesApp.ps1
 ```
 
+### App registration issues
+
+If connection fails with authentication errors:
+
+```powershell
+# Validate your app registration
+.\src\Test-ExistingAppRegistration.ps1 -ClientId "your-client-id" -TenantId "your-tenant-id"
+
+# Attempt to auto-fix common issues
+.\src\Test-ExistingAppRegistration.ps1 -ClientId "your-client-id" -TenantId "your-tenant-id" -AutoFix
+```
+
+Common issues:
+- Public client flow not enabled
+- Missing API permissions
+- Incorrect redirect URI
+
 ### "Config file not found"
 
 ```powershell
@@ -244,6 +282,7 @@ Check that all email addresses in `rules-config.json` are valid format.
 - **[Rules Cheatsheet](rules-cheatsheet.md)** - All rule conditions and actions
 - **[Security Guide](SECURITY.md)** - Security model and best practices
 - **[Testing Guide](TESTING-GUIDE.md)** - Demo environment setup
+- **[Existing App Setup](EXISTING-APP-SETUP.md)** - Use existing Azure AD app registration
 
 ---
 

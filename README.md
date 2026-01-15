@@ -34,6 +34,20 @@ PowerShell-based automation for managing Outlook inbox organization via Microsof
 .\src\Manage-OutlookRules.ps1 -Operation Deploy
 ```
 
+### Using an Existing App Registration
+
+If you cannot create new app registrations (IT restrictions):
+
+```powershell
+# Validate and configure an existing app
+.\src\Register-OutlookRulesApp.ps1 -UseExisting -ClientId "your-client-id" -TenantId "your-tenant-id"
+
+# With auto-fix for common issues
+.\src\Register-OutlookRulesApp.ps1 -UseExisting -ClientId "your-client-id" -TenantId "your-tenant-id" -AutoFix
+```
+
+See [docs/EXISTING-APP-SETUP.md](docs/EXISTING-APP-SETUP.md) for detailed requirements.
+
 ## Repository Structure
 
 ```
@@ -60,7 +74,8 @@ outlook-rules-manager/
 | Script | Purpose |
 |--------|---------|
 | `src/Install-Prerequisites.ps1` | Installs required PowerShell modules |
-| `src/Register-OutlookRulesApp.ps1` | Creates Azure AD app registration |
+| `src/Register-OutlookRulesApp.ps1` | Creates or validates Azure AD app registration |
+| `src/Test-ExistingAppRegistration.ps1` | Validates existing app registration configuration |
 | `src/Connect-OutlookRulesApp.ps1` | Authenticates to Graph and Exchange Online |
 | `src/Manage-OutlookRules.ps1` | Full rules management CLI |
 | `src/Manage-AppAuthorization.ps1` | User authorization management |
@@ -120,6 +135,7 @@ See the [docs/](docs/) folder for detailed documentation:
 
 - [Quick Start](docs/QUICKSTART.md) - Get running in 5 minutes
 - [User Guide](docs/USER-GUIDE.md) - Implementation, configuration, and usage
+- [Existing App Setup](docs/EXISTING-APP-SETUP.md) - Use existing Azure AD app registration
 - [Testing Guide](docs/TESTING-GUIDE.md) - Demo environment setup and validation
 - [SDL Compliance](docs/SDL.md) - Security development lifecycle documentation
 - [Security Questionnaire](docs/SECURITY-QUESTIONNAIRE.md) - Admin consent documentation

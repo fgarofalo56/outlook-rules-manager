@@ -93,6 +93,7 @@ outlook-rules-manager/
 │   ├── Manage-AppAuthorization.ps1    # User authorization management
 │   ├── Connect-OutlookRulesApp.ps1    # Authentication + authorization validation
 │   ├── Register-OutlookRulesApp.ps1   # Azure AD app registration (with app roles)
+│   ├── Test-ExistingAppRegistration.ps1 # Validate existing app registrations
 │   ├── Install-Prerequisites.ps1      # Module installation script
 │   ├── Setup-OutlookRules.ps1         # One-shot rules/folders creation (legacy)
 │   └── modules/
@@ -131,6 +132,7 @@ outlook-rules-manager/
 | `rules-config.json` | All rule definitions | Adding/changing rules |
 | `src/Manage-OutlookRules.ps1` | Management operations | Adding new operations |
 | `src/Manage-AppAuthorization.ps1` | User authorization | Adding/removing users |
+| `src/Test-ExistingAppRegistration.ps1` | Validate existing apps | Using existing app registration |
 | `src/modules/SecurityHelpers.psm1` | Security validation | Adding security functions |
 
 ## Key APIs & Modules
@@ -293,10 +295,24 @@ Get-ConnectionInformation
 
 ## Workflow Patterns
 
-### Initial Setup
+### Initial Setup (New App)
 ```powershell
 .\src\Install-Prerequisites.ps1             # Install modules
 .\src\Register-OutlookRulesApp.ps1          # Create Azure AD app
+.\src\Connect-OutlookRulesApp.ps1           # Authenticate
+.\src\Manage-OutlookRules.ps1 -Operation Deploy  # Deploy rules
+```
+
+### Initial Setup (Existing App)
+```powershell
+.\src\Install-Prerequisites.ps1             # Install modules
+
+# Validate and configure existing app registration
+.\src\Register-OutlookRulesApp.ps1 -UseExisting -ClientId "your-client-id" -TenantId "your-tenant-id"
+
+# Or with auto-fix for common issues
+.\src\Register-OutlookRulesApp.ps1 -UseExisting -ClientId "your-client-id" -TenantId "your-tenant-id" -AutoFix
+
 .\src\Connect-OutlookRulesApp.ps1           # Authenticate
 .\src\Manage-OutlookRules.ps1 -Operation Deploy  # Deploy rules
 ```

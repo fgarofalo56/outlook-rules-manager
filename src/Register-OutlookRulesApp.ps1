@@ -17,6 +17,11 @@
 
     No admin consent required for delegated permissions on your own mailbox.
 
+    USING AN EXISTING APP REGISTRATION:
+    If you cannot create a new app registration (e.g., IT restrictions), use
+    the -UseExisting parameter with your existing app's Client ID to validate
+    and configure it for use with Outlook Rules Manager.
+
 .PARAMETER AppName
     Name for the Azure AD application (default: "Outlook Rules Manager")
 
@@ -26,6 +31,33 @@
 .PARAMETER SkipUserAssignment
     Skip enabling "User Assignment Required" (not recommended for security)
 
+.PARAMETER UseExisting
+    Validate and configure an existing app registration instead of creating new.
+    Requires -ClientId parameter.
+
+.PARAMETER ClientId
+    The Application (client) ID of an existing app registration to validate.
+    Use with -UseExisting parameter.
+
+.PARAMETER AutoFix
+    When using -UseExisting, attempt to automatically fix configuration issues.
+
+.PARAMETER ConfigProfile
+    Profile name for multi-account support. Saves to .env.{profile} instead of .env.
+    Example: -ConfigProfile personal saves to .env.personal
+
+.EXAMPLE
+    .\Register-OutlookRulesApp.ps1
+    # Creates a new app registration with default name
+
+.EXAMPLE
+    .\Register-OutlookRulesApp.ps1 -UseExisting -ClientId "your-client-id" -TenantId "your-tenant-id"
+    # Validates an existing app registration for use with Outlook Rules Manager
+
+.EXAMPLE
+    .\Register-OutlookRulesApp.ps1 -UseExisting -ClientId "abc123" -TenantId "xyz789" -AutoFix
+    # Validates and attempts to fix any issues with existing app registration
+
 .NOTES
     Requires: Az.Accounts, Az.Resources modules
     Run from PowerShell 7+ recommended
@@ -34,7 +66,11 @@
 param(
     [string]$AppName = "Outlook Rules Manager",
     [string]$TenantId,  # Optional: specify tenant, otherwise uses current
-    [switch]$SkipUserAssignment
+    [switch]$SkipUserAssignment,
+    [switch]$UseExisting,
+    [string]$ClientId,
+    [switch]$AutoFix,
+    [string]$ConfigProfile
 )
 
 # ---------------------------
@@ -50,6 +86,52 @@ foreach ($mod in $requiredModules) {
 
 Import-Module Az.Accounts
 Import-Module Az.Resources
+
+# ---------------------------
+# HANDLE -UseExisting MODE
+# ---------------------------
+if ($UseExisting) {
+    if (-not $ClientId) {
+        Write-Host "ERROR: -UseExisting requires -ClientId parameter" -ForegroundColor Red
+        Write-Host "Usage: .\Register-OutlookRulesApp.ps1 -UseExisting -ClientId 'your-client-id' -TenantId 'your-tenant-id'" -ForegroundColor Yellow
+        exit 1
+    }
+
+    if (-not $TenantId) {
+        Write-Host "ERROR: -UseExisting requires -TenantId parameter" -ForegroundColor Red
+        Write-Host "Usage: .\Register-OutlookRulesApp.ps1 -UseExisting -ClientId 'your-client-id' -TenantId 'your-tenant-id'" -ForegroundColor Yellow
+        exit 1
+    }
+
+    Write-Host "`n=== Using Existing App Registration ===" -ForegroundColor Cyan
+    Write-Host "This will validate and configure an existing app for Outlook Rules Manager." -ForegroundColor Gray
+
+    # Build parameters for the validation script
+    $testParams = @{
+        ClientId   = $ClientId
+        TenantId   = $TenantId
+        SaveConfig = $true
+    }
+
+    if ($AutoFix) {
+        $testParams["AutoFix"] = $true
+    }
+
+    if ($ConfigProfile) {
+        $testParams["ConfigProfile"] = $ConfigProfile
+    }
+
+    # Call the validation script
+    $testScript = Join-Path $PSScriptRoot "Test-ExistingAppRegistration.ps1"
+
+    if (-not (Test-Path $testScript)) {
+        Write-Host "ERROR: Test-ExistingAppRegistration.ps1 not found at: $testScript" -ForegroundColor Red
+        exit 1
+    }
+
+    & $testScript @testParams
+    exit $LASTEXITCODE
+}
 
 # ---------------------------
 # AUTHENTICATE TO AZURE

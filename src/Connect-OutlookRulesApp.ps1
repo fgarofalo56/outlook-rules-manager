@@ -182,6 +182,58 @@ try {
     Write-Host "  Scopes: $($ctx.Scopes -join ', ')" -ForegroundColor Gray
 } catch {
     Write-Host "  ERROR connecting to Graph: $($_.Exception.Message)" -ForegroundColor Red
+
+    # Provide helpful diagnostics based on error message
+    $errorMsg = $_.Exception.Message.ToLower()
+
+    if ($errorMsg -match "invalid_client" -or $errorMsg -match "application.*not found") {
+        Write-Host "`n  DIAGNOSIS: App registration not found or misconfigured" -ForegroundColor Yellow
+        Write-Host "  Possible causes:" -ForegroundColor Gray
+        Write-Host "    1. Client ID is incorrect" -ForegroundColor Gray
+        Write-Host "    2. App was deleted from Azure AD" -ForegroundColor Gray
+        Write-Host "    3. App exists in a different tenant" -ForegroundColor Gray
+        Write-Host "`n  FIX: Validate your app registration:" -ForegroundColor Cyan
+        Write-Host "    .\src\Test-ExistingAppRegistration.ps1 -ClientId '$ClientId' -TenantId '$TenantId'" -ForegroundColor White
+    }
+    elseif ($errorMsg -match "redirect" -or $errorMsg -match "reply.*url") {
+        Write-Host "`n  DIAGNOSIS: Redirect URI issue" -ForegroundColor Yellow
+        Write-Host "  The app registration is missing the required redirect URI." -ForegroundColor Gray
+        Write-Host "`n  FIX: Add this redirect URI in Azure Portal:" -ForegroundColor Cyan
+        Write-Host "    https://login.microsoftonline.com/common/oauth2/nativeclient" -ForegroundColor White
+        Write-Host "`n  Or validate and auto-fix with:" -ForegroundColor Cyan
+        Write-Host "    .\src\Test-ExistingAppRegistration.ps1 -ClientId '$ClientId' -TenantId '$TenantId' -AutoFix" -ForegroundColor White
+    }
+    elseif ($errorMsg -match "public.*client" -or $errorMsg -match "device.*code") {
+        Write-Host "`n  DIAGNOSIS: Public client flow not enabled" -ForegroundColor Yellow
+        Write-Host "  Device code authentication requires public client flow." -ForegroundColor Gray
+        Write-Host "`n  FIX: Enable in Azure Portal:" -ForegroundColor Cyan
+        Write-Host "    App Registration > Authentication > Allow public client flows = Yes" -ForegroundColor White
+        Write-Host "`n  Or validate and auto-fix with:" -ForegroundColor Cyan
+        Write-Host "    .\src\Test-ExistingAppRegistration.ps1 -ClientId '$ClientId' -TenantId '$TenantId' -AutoFix" -ForegroundColor White
+    }
+    elseif ($errorMsg -match "consent" -or $errorMsg -match "permission") {
+        Write-Host "`n  DIAGNOSIS: Permission consent issue" -ForegroundColor Yellow
+        Write-Host "  The required permissions may not be granted." -ForegroundColor Gray
+        Write-Host "`n  Required permissions:" -ForegroundColor Cyan
+        Write-Host "    - Microsoft Graph: Mail.ReadWrite (delegated)" -ForegroundColor White
+        Write-Host "    - Microsoft Graph: User.Read (delegated)" -ForegroundColor White
+        Write-Host "`n  FIX: Add permissions in Azure Portal > API permissions" -ForegroundColor Cyan
+    }
+    elseif ($errorMsg -match "unauthorized" -or $errorMsg -match "access.*denied") {
+        Write-Host "`n  DIAGNOSIS: Access denied" -ForegroundColor Yellow
+        Write-Host "  You may not be authorized to use this app." -ForegroundColor Gray
+        Write-Host "`n  Possible causes:" -ForegroundColor Gray
+        Write-Host "    1. 'User Assignment Required' is enabled and you're not assigned" -ForegroundColor Gray
+        Write-Host "    2. Conditional Access policy blocking access" -ForegroundColor Gray
+        Write-Host "    3. Account doesn't have Exchange Online license" -ForegroundColor Gray
+        Write-Host "`n  FIX: Contact your administrator or check:" -ForegroundColor Cyan
+        Write-Host "    .\src\Manage-AppAuthorization.ps1 -Operation Status" -ForegroundColor White
+    }
+    else {
+        Write-Host "`n  TIP: Validate your app configuration with:" -ForegroundColor Yellow
+        Write-Host "    .\src\Test-ExistingAppRegistration.ps1 -ClientId '$ClientId' -TenantId '$TenantId'" -ForegroundColor White
+    }
+
     exit 1
 }
 
@@ -207,8 +259,29 @@ if ($exoConn) {
         Write-Host "  Connected to Exchange Online" -ForegroundColor Green
     } catch {
         Write-Host "  ERROR connecting to Exchange Online: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "  Note: Exchange Online connection is separate from Graph" -ForegroundColor Yellow
-        Write-Host "  You may need to authenticate again" -ForegroundColor Yellow
+
+        $errorMsg = $_.Exception.Message.ToLower()
+
+        if ($errorMsg -match "license" -or $errorMsg -match "mailbox") {
+            Write-Host "`n  DIAGNOSIS: Exchange Online mailbox not found" -ForegroundColor Yellow
+            Write-Host "  Possible causes:" -ForegroundColor Gray
+            Write-Host "    1. Account doesn't have Exchange Online license" -ForegroundColor Gray
+            Write-Host "    2. Mailbox hasn't been provisioned yet" -ForegroundColor Gray
+            Write-Host "    3. Using a personal Microsoft account (not supported)" -ForegroundColor Gray
+        }
+        elseif ($errorMsg -match "mfa" -or $errorMsg -match "multi-factor") {
+            Write-Host "`n  DIAGNOSIS: MFA required" -ForegroundColor Yellow
+            Write-Host "  Complete the MFA prompt in the browser to continue." -ForegroundColor Gray
+        }
+        elseif ($errorMsg -match "blocked" -or $errorMsg -match "disabled") {
+            Write-Host "`n  DIAGNOSIS: Account or access blocked" -ForegroundColor Yellow
+            Write-Host "  Contact your administrator to check account status." -ForegroundColor Gray
+        }
+        else {
+            Write-Host "`n  Note: Exchange Online connection is separate from Graph" -ForegroundColor Yellow
+            Write-Host "  You may need to authenticate again" -ForegroundColor Yellow
+        }
+
         exit 1
     }
 }
